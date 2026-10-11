@@ -21,6 +21,8 @@ interface PipelineViewProps {
   onOpenFollowUp: (prospect: Prospect) => void;
   onMoveStatus: (prospectId: string, newStatus: ProspectStatus) => void;
   onNewProspect: (initialStatus?: ProspectStatus) => void;
+  onEditProspect?: (prospect: Prospect) => void;
+  onDeleteProspect?: (prospect: Prospect) => void;
 }
 
 export const PipelineView: React.FC<PipelineViewProps> = ({
@@ -29,7 +31,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   onSelectProspect,
   onOpenFollowUp,
   onMoveStatus,
-  onNewProspect
+  onNewProspect,
+  onEditProspect,
+  onDeleteProspect
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -177,6 +181,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           onOpenFollowUp={onOpenFollowUp}
           onMoveStatus={onMoveStatus}
           onNewProspectWithStatus={(st) => onNewProspect(st)}
+          onEditProspect={onEditProspect}
+          onDeleteProspect={onDeleteProspect}
         />
       ) : (
         <ProspectTableView
@@ -184,6 +190,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           onSelectProspect={onSelectProspect}
           onOpenFollowUp={onOpenFollowUp}
           onMoveStatus={onMoveStatus}
+          onEditProspect={onEditProspect}
+          onDeleteProspect={onDeleteProspect}
         />
       )}
     </div>

@@ -27,26 +27,29 @@ CRM sur-mesure, ultra-rapide, orienté productivité et zéro clic superflu. Con
 │   ├── components/
 │   │   ├── auth/
 │   │   │   └── LoginView.tsx      # Page de connexion sécurisée (Matt / Maboule35!)
+│   │   ├── leads/
+│   │   │   └── LeadsView.tsx      # Nouvel onglet dédié : Qualification, modification & suppression des Leads
 │   │   ├── Header.tsx             # Barre d'en-tête MK CRM, profil, mode sombre, sauvegarde JSON
-│   │   ├── Navigation.tsx         # Onglets avec compteurs d'alertes en temps réel
+│   │   ├── Navigation.tsx         # Onglets avec compteurs d'alertes en temps réel (Leads, Relances, etc.)
 │   │   ├── dashboard/
-│   │   │   ├── DailyDashboard.tsx # Cockpit du jour (Relances prioritaires, To-Do list, KPI cards)
+│   │   │   ├── DailyDashboard.tsx # Cockpit du jour (Relances prioritaires, To-Do list avec suppression)
 │   │   │   ├── StatCard.tsx       # Composant carte KPI réutilisable
 │   │   │   └── FollowUpModal.tsx  # Assistant de relance (templates email & mise à jour en 1 clic)
 │   │   ├── pipeline/
 │   │   │   ├── PipelineView.tsx   # Vue bascule Kanban / Tableau avec filtres multicritères
-│   │   │   ├── KanbanBoard.tsx    # Pipeline Kanban avec glisser-déposer et sous-totaux par étape
-│   │   │   ├── ProspectTableView.tsx # Tableau interactif avec tri et changement de statut inline
-│   │   │   ├── ProspectCard.tsx   # Carte affaire ergonomique (score, valeur, délai sans contact)
+│   │   │   ├── KanbanBoard.tsx    # Pipeline Kanban avec glisser-déposer, édition & suppression
+│   │   │   ├── ProspectTableView.tsx # Tableau interactif avec tri, édition & suppression inline
+│   │   │   ├── ProspectCard.tsx   # Carte affaire ergonomique (actions rapides modifier / supprimer)
 │   │   │   └── ProspectModal.tsx  # Modale d'ajout/édition avec calcul automatique du lead score
 │   │   ├── tickets/
 │   │   │   ├── TicketListView.tsx # Gestion des tickets support & interventions Pack Sérénité
 │   │   │   └── TicketModal.tsx    # Création/modification de ticket avec client rattaché
 │   │   ├── contracts/
 │   │   │   ├── ContractsMrrView.tsx  # Pilotage des contrats récurrents & revenus mensuels (MRR/ARR)
-│   │   │   └── ClientDetailDrawer.tsx # Tiroir fiche client (contrats actifs, timeline d'échanges)
+│   │   │   └── ClientDetailDrawer.tsx # Tiroir fiche client (bouton Modifier, suppression sécurisée)
 │   │   └── common/
-│   │       └── Toast.tsx          # Notifications discrètes d'action
+│   │       ├── Toast.tsx          # Notifications discrètes d'action
+│   │       └── ConfirmDialog.tsx  # Modale in-app de confirmation (remplace window.confirm)
 │   ├── App.tsx                    # Orchestration de l'état principal, auth et synchronisation
 │   ├── main.tsx                   # Point d'entrée React 19
 │   └── index.css                  # Styles Tailwind CSS et Dark/Light mode

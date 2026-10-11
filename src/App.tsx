@@ -29,6 +29,8 @@ import { TicketModal } from './components/tickets/TicketModal';
 import { ClientDetailDrawer } from './components/contracts/ClientDetailDrawer';
 import { Toast } from './components/common/Toast';
 import { LoginView } from './components/auth/LoginView';
+import { LeadsView } from './components/leads/LeadsView';
+import { ConfirmDialog } from './components/common/ConfirmDialog';
 
 export default function App() {
   // Authentication State
@@ -73,6 +75,8 @@ export default function App() {
   const [followUpProspect, setFollowUpProspect] = useState<Prospect | null>(null);
 
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
+  const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -327,6 +331,24 @@ export default function App() {
     showToast('Action ajoutée à la to-do du jour.');
   };
 
+  const handleDeleteTask = (taskId: string) => {
+    const updated = database.tasks.filter((t) => t.id !== taskId);
+    updateDb({
+      ...database,
+      tasks: updated
+    });
+    showToast('Tâche supprimée de la to-do list.');
+  };
+
+  const handleClearCompletedTasks = () => {
+    const updated = database.tasks.filter((t) => !t.completed);
+    updateDb({
+      ...database,
+      tasks: updated
+    });
+    showToast('Toutes les tâches terminées ont été supprimées.');
+  };
+
   // 6. Backup & Restore
   const handleExport = () => {
     exportDatabaseAsJson(database);
@@ -344,15 +366,7 @@ export default function App() {
   };
 
   const handleReset = () => {
-    if (
-      confirm(
-        'Réinitialiser toutes les données locales avec les données de test par défaut (MP41, Logistique Sologne, Pack Sérénité) ?'
-      )
-    ) {
-      const reset = resetDatabase();
-      setDatabase(reset);
-      showToast('Données de démo réinitialisées avec succès !');
-    }
+    setIsResetConfirmOpen(true);
   };
 
   const handleLogout = () => {
@@ -413,6 +427,7 @@ export default function App() {
         urgentFollowUpsCount={followUpAlerts.length}
         openTicketsCount={database.tickets.filter((t) => t.status !== 'Résolu').length}
         activeMrrCount={mrrMetrics.activeServicesCount}
+        leadsCount={database.prospects.filter((p) => p.status !== 'Gagné' && p.status !== 'Perdu').length}
       />
 
       {/* Main Content Viewport */}
@@ -447,8 +462,25 @@ export default function App() {
             onMarkContactedToday={handleMarkContactedToday}
             onToggleTask={handleToggleTask}
             onAddTask={handleAddTask}
+            onDeleteTask={handleDeleteTask}
+            onClearCompletedTasks={handleClearCompletedTasks}
             onSelectProspect={(p) => setSelectedProspectId(p.id)}
             onNavigateToTab={(tab) => setActiveTab(tab)}
+          />
+        )}
+
+        {activeTab === 'leads' && (
+          <LeadsView
+            prospects={displayedProspects}
+            onSelectProspect={(p) => setSelectedProspectId(p.id)}
+            onEditProspect={handleEditProspect}
+            onDeleteProspect={(p) => setProspectToDelete(p)}
+            onOpenFollowUp={(p) => {
+              setFollowUpProspect(p);
+              setIsFollowUpModalOpen(true);
+            }}
+            onMoveStatus={handleMoveProspectStatus}
+            onNewLead={() => handleOpenNewProspect('Lead entrant')}
           />
         )}
 
@@ -463,6 +495,8 @@ export default function App() {
             }}
             onMoveStatus={handleMoveProspectStatus}
             onNewProspect={(initialStatus) => handleOpenNewProspect(initialStatus)}
+            onEditProspect={handleEditProspect}
+            onDeleteProspect={(p) => setProspectToDelete(p)}
           />
         )}
 
@@ -517,12 +551,47 @@ export default function App() {
         isOpen={selectedProspectId !== null}
         onClose={() => setSelectedProspectId(null)}
         onUpdateProspect={handleUpdateProspectDetails}
+        onEditProspect={handleEditProspect}
         onOpenFollowUp={(p) => {
           setFollowUpProspect(p);
           setIsFollowUpModalOpen(true);
         }}
         onDeleteProspect={handleDeleteProspect}
         onShowToast={showToast}
+      />
+
+      {/* In-App Delete Confirmation Dialog for Companies */}
+      <ConfirmDialog
+        isOpen={prospectToDelete !== null}
+        title={`Supprimer "${prospectToDelete?.company}" ?`}
+        message={`Cette action est irréversible. L'entreprise "${prospectToDelete?.company}", ses coordonnées et son historique seront définitivement supprimés de MK CRM.`}
+        confirmLabel="Oui, supprimer définitivement"
+        cancelLabel="Annuler"
+        variant="danger"
+        onConfirm={() => {
+          if (prospectToDelete) {
+            handleDeleteProspect(prospectToDelete.id);
+            setProspectToDelete(null);
+          }
+        }}
+        onCancel={() => setProspectToDelete(null)}
+      />
+
+      {/* In-App Reset Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isResetConfirmOpen}
+        title="Réinitialiser les données de démonstration ?"
+        message="Cette action rechargera les données par défaut de MK CRM (MP41, Logistique Sologne, Pack Sérénité). Les modifications actuelles seront écrasées."
+        confirmLabel="Réinitialiser"
+        cancelLabel="Annuler"
+        variant="warning"
+        onConfirm={() => {
+          const reset = resetDatabase();
+          setDatabase(reset);
+          setIsResetConfirmOpen(false);
+          showToast('Données de démo réinitialisées avec succès !');
+        }}
+        onCancel={() => setIsResetConfirmOpen(false)}
       />
 
       {/* Non-intrusive Toast feedback */}

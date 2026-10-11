@@ -14,7 +14,8 @@ import {
   FileCheck,
   Building,
   CheckSquare,
-  Square
+  Square,
+  Trash2
 } from 'lucide-react';
 import { Prospect, Ticket, DailyTask } from '../../types/crm';
 import { StatCard } from './StatCard';
@@ -32,8 +33,10 @@ interface DailyDashboardProps {
   onMarkContactedToday: (prospectId: string, note?: string) => void;
   onToggleTask: (taskId: string) => void;
   onAddTask: (title: string, priority: 'Haute' | 'Moyenne' | 'Basse') => void;
+  onDeleteTask: (taskId: string) => void;
+  onClearCompletedTasks?: () => void;
   onSelectProspect: (prospect: Prospect) => void;
-  onNavigateToTab: (tab: 'pipeline' | 'tickets' | 'contracts') => void;
+  onNavigateToTab: (tab: 'leads' | 'pipeline' | 'tickets' | 'contracts') => void;
 }
 
 export const DailyDashboard: React.FC<DailyDashboardProps> = ({
@@ -47,6 +50,8 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
   onMarkContactedToday,
   onToggleTask,
   onAddTask,
+  onDeleteTask,
+  onClearCompletedTasks,
   onSelectProspect,
   onNavigateToTab
 }) => {
@@ -324,9 +329,20 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                   To-Do Prioritaire du Jour
                 </h3>
               </div>
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {completedTasksCount} / {tasks.length} faites
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {completedTasksCount} / {tasks.length} faites
+                </span>
+                {completedTasksCount > 0 && onClearCompletedTasks && (
+                  <button
+                    onClick={onClearCompletedTasks}
+                    className="text-[10px] text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 font-medium underline cursor-pointer"
+                    title="Supprimer toutes les tâches terminées"
+                  >
+                    Vider faites
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Quick Add Task Input */}
@@ -368,7 +384,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                 tasks.map((task) => (
                   <div
                     key={task.id}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${
+                    className={`group flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${
                       task.completed
                         ? 'border-slate-200/50 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-800/20 opacity-60'
                         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
@@ -400,17 +416,26 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                         </p>
                       )}
                     </div>
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm shrink-0 ${
-                        task.priority === 'Haute'
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
-                          : task.priority === 'Moyenne'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'
-                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                      }`}
-                    >
-                      {task.priority}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
+                          task.priority === 'Haute'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
+                            : task.priority === 'Moyenne'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {task.priority}
+                      </span>
+                      <button
+                        onClick={() => onDeleteTask(task.id)}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                        title="Supprimer cette tâche"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

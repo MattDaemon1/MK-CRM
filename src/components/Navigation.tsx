@@ -1,13 +1,13 @@
 import React from 'react';
 import {
   LayoutDashboard,
+  Target,
   Kanban,
   LifeBuoy,
-  Repeat,
-  AlertCircle
+  Repeat
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'pipeline' | 'tickets' | 'contracts';
+export type ActiveTab = 'dashboard' | 'leads' | 'pipeline' | 'tickets' | 'contracts';
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -15,6 +15,7 @@ interface NavigationProps {
   urgentFollowUpsCount: number;
   openTicketsCount: number;
   activeMrrCount: number;
+  leadsCount: number;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -22,15 +23,23 @@ export const Navigation: React.FC<NavigationProps> = ({
   onChangeTab,
   urgentFollowUpsCount,
   openTicketsCount,
-  activeMrrCount
+  activeMrrCount,
+  leadsCount
 }) => {
   const tabs = [
     {
       id: 'dashboard' as ActiveTab,
-      label: 'To-Do & Relances du Jour',
+      label: 'To-Do & Relances',
       icon: LayoutDashboard,
       badge: urgentFollowUpsCount > 0 ? urgentFollowUpsCount : null,
       badgeColor: 'bg-rose-500 text-white'
+    },
+    {
+      id: 'leads' as ActiveTab,
+      label: 'Leads & Qualification',
+      icon: Target,
+      badge: leadsCount > 0 ? leadsCount : null,
+      badgeColor: 'bg-indigo-500 text-white'
     },
     {
       id: 'pipeline' as ActiveTab,

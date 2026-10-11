@@ -79,6 +79,36 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
   const [manualScore, setManualScore] = useState<number>(editingProspect?.lead_score || 80);
   const [isManualOverride, setIsManualOverride] = useState<boolean>(false);
 
+  // Sync state whenever editingProspect or modal open status changes
+  useEffect(() => {
+    if (editingProspect) {
+      setCompany(editingProspect.company);
+      setContactName(editingProspect.contact_name);
+      setEmail(editingProspect.email);
+      setPhone(editingProspect.phone);
+      setSource(editingProspect.source);
+      setServiceType(editingProspect.service_type);
+      setStatus(editingProspect.status);
+      setEstimatedValue(editingProspect.estimated_value);
+      setLastContactDate(editingProspect.last_contact_date);
+      setNotes(editingProspect.notes ? editingProspect.notes.join('\n') : '');
+      setManualScore(editingProspect.lead_score);
+    } else {
+      setCompany('');
+      setContactName('');
+      setEmail('');
+      setPhone('');
+      setSource('Formulaire de contact web');
+      setServiceType('Refonte & Dev Web');
+      setStatus(initialStatus || 'Lead entrant');
+      setEstimatedValue(3500);
+      setLastContactDate('2026-10-11');
+      setNotes('');
+      setManualScore(80);
+    }
+    setIsManualOverride(false);
+  }, [editingProspect, initialStatus, isOpen]);
+
   // Live computed score result
   const [scoreResult, setScoreResult] = useState<ScoreResult>(() =>
     computeLeadScore({
@@ -132,7 +162,16 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
       lead_score: isManualOverride ? manualScore : scoreResult.score,
       priority: currentPriority,
       last_contact_date: lastContactDate,
-      notes: notesList.length > 0 ? notesList : ['Demande enregistrée.']
+      notes: notesList.length > 0 ? notesList : ['Demande enregistrée.'],
+      active_services: editingProspect?.active_services || [],
+      timeline: editingProspect?.timeline || [
+        {
+          id: `t-${Date.now()}`,
+          date: '2026-10-11 12:00',
+          type: 'status_change',
+          content: `Création du prospect avec le statut "${status}"`
+        }
+      ]
     });
     onClose();
   };

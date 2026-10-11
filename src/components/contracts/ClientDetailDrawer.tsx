@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   DollarSign,
   Flame,
-  FileText
+  FileText,
+  Edit2
 } from 'lucide-react';
 import {
   Prospect,
@@ -29,6 +30,7 @@ interface ClientDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateProspect: (updated: Prospect) => void;
+  onEditProspect: (prospect: Prospect) => void;
   onOpenFollowUp: (prospect: Prospect) => void;
   onDeleteProspect: (prospectId: string) => void;
   onShowToast: (message: string) => void;
@@ -48,6 +50,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   isOpen,
   onClose,
   onUpdateProspect,
+  onEditProspect,
   onOpenFollowUp,
   onDeleteProspect,
   onShowToast
@@ -55,6 +58,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   if (!isOpen || !prospect) return null;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'timeline'>('overview');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [noteType, setNoteType] = useState<'note' | 'call' | 'email' | 'meeting'>('note');
 
@@ -174,6 +178,16 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                onEditProspect(prospect);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors cursor-pointer"
+              title="Modifier les informations de l'entreprise"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Modifier</span>
+            </button>
             <button
               onClick={() => onOpenFollowUp(prospect)}
               className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
@@ -320,19 +334,39 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
               </div>
 
               {/* Danger Zone */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                <button
-                  onClick={() => {
-                    if (confirm(`Supprimer définitivement ${prospect.company} ?`)) {
-                      onDeleteProspect(prospect.id);
-                      onClose();
-                    }
-                  }}
-                  className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer cette affaire</span>
-                </button>
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                {!confirmDelete ? (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1.5 font-semibold cursor-pointer py-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer cette entreprise / affaire</span>
+                  </button>
+                ) : (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center justify-between gap-3">
+                    <span className="text-xs text-rose-700 dark:text-rose-300 font-medium">
+                      Confirmer la suppression de {prospect.company} ?
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          onDeleteProspect(prospect.id);
+                          onClose();
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-xs"
+                      >
+                        Oui, supprimer
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="px-2 py-1 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

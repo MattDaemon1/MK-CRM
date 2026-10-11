@@ -7,7 +7,9 @@ import {
   Clock,
   Sparkles,
   Phone,
-  FileText
+  FileText,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Prospect, ProspectStatus } from '../../types/crm';
 import { getDaysSinceDate } from '../../services/followUpEngine';
@@ -18,6 +20,8 @@ interface ProspectCardProps {
   onOpenFollowUp: (prospect: Prospect) => void;
   onMoveStatus: (prospectId: string, newStatus: ProspectStatus) => void;
   availableStatuses: ProspectStatus[];
+  onEditProspect?: (prospect: Prospect) => void;
+  onDeleteProspect?: (prospect: Prospect) => void;
 }
 
 export const ProspectCard: React.FC<ProspectCardProps> = ({
@@ -25,7 +29,9 @@ export const ProspectCard: React.FC<ProspectCardProps> = ({
   onSelect,
   onOpenFollowUp,
   onMoveStatus,
-  availableStatuses
+  availableStatuses,
+  onEditProspect,
+  onDeleteProspect
 }) => {
   const daysSince = getDaysSinceDate(prospect.last_contact_date);
   const currentIndex = availableStatuses.indexOf(prospect.status);
@@ -132,6 +138,32 @@ export const ProspectCard: React.FC<ProspectCardProps> = ({
           >
             <Mail className="w-3 h-3" />
           </button>
+
+          {onEditProspect && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditProspect(prospect);
+              }}
+              className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              title="Modifier l'entreprise"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
+          )}
+
+          {onDeleteProspect && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteProspect(prospect);
+              }}
+              className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              title="Supprimer cette entreprise"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
 
           {canMovePrev && (
             <button

@@ -9,6 +9,8 @@ interface KanbanBoardProps {
   onOpenFollowUp: (prospect: Prospect) => void;
   onMoveStatus: (prospectId: string, newStatus: ProspectStatus) => void;
   onNewProspectWithStatus?: (status: ProspectStatus) => void;
+  onEditProspect?: (prospect: Prospect) => void;
+  onDeleteProspect?: (prospect: Prospect) => void;
 }
 
 const COLUMNS: { id: ProspectStatus; label: string; dotColor: string }[] = [
@@ -25,7 +27,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onSelectProspect,
   onOpenFollowUp,
   onMoveStatus,
-  onNewProspectWithStatus
+  onNewProspectWithStatus,
+  onEditProspect,
+  onDeleteProspect
 }) => {
   const [dragOverColumn, setDragOverColumn] = useState<ProspectStatus | null>(null);
 
@@ -100,6 +104,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   onOpenFollowUp={onOpenFollowUp}
                   onMoveStatus={onMoveStatus}
                   availableStatuses={statusesList}
+                  onEditProspect={onEditProspect}
+                  onDeleteProspect={onDeleteProspect}
                 />
               ))}
 

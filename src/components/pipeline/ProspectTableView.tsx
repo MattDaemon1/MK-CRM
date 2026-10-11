@@ -6,7 +6,9 @@ import {
   Flame,
   Clock,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Prospect, ProspectStatus } from '../../types/crm';
 import { getDaysSinceDate } from '../../services/followUpEngine';
@@ -16,6 +18,8 @@ interface ProspectTableViewProps {
   onSelectProspect: (prospect: Prospect) => void;
   onOpenFollowUp: (prospect: Prospect) => void;
   onMoveStatus: (prospectId: string, newStatus: ProspectStatus) => void;
+  onEditProspect?: (prospect: Prospect) => void;
+  onDeleteProspect?: (prospect: Prospect) => void;
 }
 
 type SortField = 'company' | 'estimated_value' | 'lead_score' | 'last_contact_date';
@@ -33,7 +37,9 @@ export const ProspectTableView: React.FC<ProspectTableViewProps> = ({
   prospects,
   onSelectProspect,
   onOpenFollowUp,
-  onMoveStatus
+  onMoveStatus,
+  onEditProspect,
+  onDeleteProspect
 }) => {
   const [sortField, setSortField] = useState<SortField>('lead_score');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
@@ -212,6 +218,26 @@ export const ProspectTableView: React.FC<ProspectTableViewProps> = ({
                       >
                         <Mail className="w-3.5 h-3.5" />
                       </button>
+
+                      {onEditProspect && (
+                        <button
+                          onClick={() => onEditProspect(prospect)}
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                          title="Modifier les informations de l'entreprise"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {onDeleteProspect && (
+                        <button
+                          onClick={() => onDeleteProspect(prospect)}
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                          title="Supprimer cette entreprise"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
                       <button
                         onClick={() => onSelectProspect(prospect)}
