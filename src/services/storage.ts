@@ -1,33 +1,46 @@
 import { INITIAL_DATABASE } from '../data/initialData';
-import { CrmDatabase, Prospect, Ticket, DailyTask } from '../types/crm';
+import { CrmDatabase, Prospect, Ticket, DailyTask, DEFAULT_SERVICE_TYPES } from '../types/crm';
 
-const STORAGE_KEY = 'kroma_crm_database_v1';
+const STORAGE_KEY = 'mk_crm_database_v2';
+const REFERENCE_DATE = new Date('2026-10-11');
 
+export function getDaysUntilRenewal(renewalDate?: string): number {
+  if (!renewalDate) return 999;
+  const target = new Date(renewalDate);
+  const diffTime = target.getTime() - REFERENCE_DATE.getTime();
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
+// 1. Local Cache Loader (instant offline fallback)
 export function loadDatabase(): CrmDatabase {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      saveDatabase(INITIAL_DATABASE);
+      saveDatabaseLocally(INITIAL_DATABASE);
       return INITIAL_DATABASE;
     }
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.prospects)) {
-      saveDatabase(INITIAL_DATABASE);
+      saveDatabaseLocally(INITIAL_DATABASE);
       return INITIAL_DATABASE;
+    }
+    if (!parsed.custom_service_types || !Array.isArray(parsed.custom_service_types)) {
+      parsed.custom_service_types = DEFAULT_SERVICE_TYPES;
     }
     return parsed as CrmDatabase;
   } catch (err) {
-    console.error('Erreur chargement base de données locale :', err);
-    saveDatabase(INITIAL_DATABASE);
+    console.error('Erreur chargement base locale :', err);
+    saveDatabaseLocally(INITIAL_DATABASE);
     return INITIAL_DATABASE;
   }
 }
 
-export function saveDatabase(db: CrmDatabase): void {
+function saveDatabaseLocally(db: CrmDatabase): void {
   try {
     const updated: CrmDatabase = {
       ...db,
-      last_updated: new Date().toISOString()
+      last_updated: new Date().toISOString(),
+      custom_service_types: db.custom_service_types || DEFAULT_SERVICE_TYPES
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated, null, 2));
   } catch (err) {
@@ -35,7 +48,63 @@ export function saveDatabase(db: CrmDatabase): void {
   }
 }
 
-export function resetDatabase(): CrmDatabase {
+// 2. Multi-Device Server Sync (PC <-> Mobile)
+export async function syncDatabaseWithServer(): Promise<CrmDatabase | null> {
+  try {
+    const res = await fetch(`/api/crm?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    if (!res.ok) return null;
+    const serverDb = await res.json();
+    if (serverDb && Array.isArray(serverDb.prospects)) {
+      if (!serverDb.custom_service_types || !Array.isArray(serverDb.custom_service_types)) {
+        serverDb.custom_service_types = DEFAULT_SERVICE_TYPES;
+      }
+      saveDatabaseLocally(serverDb);
+      return serverDb as CrmDatabase;
+    }
+  } catch (err) {
+    // Offline or server start
+    console.warn('Mode hors-ligne / fallback local:', err);
+  }
+  return null;
+}
+
+export function saveDatabase(db: CrmDatabase): void {
+  const updated: CrmDatabase = {
+    ...db,
+    last_updated: new Date().toISOString(),
+    custom_service_types: db.custom_service_types || DEFAULT_SERVICE_TYPES
+  };
+
+  // 1. Save locally immediately
+  saveDatabaseLocally(updated);
+
+  // 2. Push to server for PC <-> Mobile sync
+  try {
+    fetch('/api/crm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updated)
+    }).catch((err) => {
+      console.warn('Échec envoi serveur (synchro différée) :', err);
+    });
+  } catch (e) {
+    // Ignore fetch error in pure client mode
+  }
+}
+
+export async function resetDatabase(): Promise<CrmDatabase> {
+  try {
+    await fetch('/api/crm/reset', { method: 'POST' }).catch(() => {});
+  } catch (e) {}
+
   localStorage.removeItem(STORAGE_KEY);
   saveDatabase(INITIAL_DATABASE);
   return INITIAL_DATABASE;
@@ -48,7 +117,7 @@ export function exportDatabaseAsJson(db: CrmDatabase): void {
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', jsonString);
   const dateStr = new Date().toISOString().slice(0, 10);
-  downloadAnchor.setAttribute('download', `kroma_crm_backup_${dateStr}.json`);
+  downloadAnchor.setAttribute('download', `mk_crm_backup_${dateStr}.json`);
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
@@ -60,7 +129,6 @@ export function parseAndValidateImport(jsonString: string): CrmDatabase {
     throw new Error('Le fichier ne contient pas un objet JSON valide.');
   }
 
-  // Si l'utilisateur importe directement l'objet { prospects: [...] } ou le format complet CrmDatabase
   const prospects: Prospect[] = Array.isArray(parsed.prospects) ? parsed.prospects : [];
   const tickets: Ticket[] = Array.isArray(parsed.tickets) ? parsed.tickets : [];
   const tasks: DailyTask[] = Array.isArray(parsed.tasks) ? parsed.tasks : [];
@@ -74,7 +142,8 @@ export function parseAndValidateImport(jsonString: string): CrmDatabase {
     last_updated: new Date().toISOString(),
     prospects,
     tickets,
-    tasks
+    tasks,
+    custom_service_types: parsed.custom_service_types || DEFAULT_SERVICE_TYPES
   };
 
   saveDatabase(validDb);
@@ -125,7 +194,6 @@ export function calculatePipelineMetrics(prospects: Prospect[]): PipelineMetrics
       totalLostValue += val;
       totalClosed++;
     } else {
-      // Affaires en cours dans le pipeline
       totalPipelineValue += val;
       const weight = stageWeights[p.status] || 0.2;
       weightedPipelineValue += Math.round(val * weight);
@@ -149,13 +217,21 @@ export function calculatePipelineMetrics(prospects: Prospect[]): PipelineMetrics
 export interface MrrMetrics {
   monthlyMrr: number;
   annualArr: number;
+  annualContractsCount: number;
+  annualContractsTotal: number;
+  monthlyContractsCount: number;
   activeServicesCount: number;
   activeClientsCount: number;
+  upcomingRenewalsCount: number; // Renouvellements sous 30 jours
 }
 
 export function calculateMrrMetrics(prospects: Prospect[]): MrrMetrics {
   let monthlyMrr = 0;
   let activeServicesCount = 0;
+  let annualContractsCount = 0;
+  let annualContractsTotal = 0;
+  let monthlyContractsCount = 0;
+  let upcomingRenewalsCount = 0;
   const clientIdsWithServices = new Set<string>();
 
   for (const p of prospects) {
@@ -163,9 +239,22 @@ export function calculateMrrMetrics(prospects: Prospect[]): MrrMetrics {
 
     for (const s of p.active_services) {
       if (s.status === 'Actif') {
-        monthlyMrr += s.monthly_price || 0;
+        const mPrice = s.monthly_price || 0;
+        monthlyMrr += mPrice;
         activeServicesCount++;
         clientIdsWithServices.add(p.id);
+
+        if (s.billing_cycle === 'Annuel') {
+          annualContractsCount++;
+          annualContractsTotal += s.annual_price || mPrice * 12;
+        } else {
+          monthlyContractsCount++;
+        }
+
+        const daysToRenew = getDaysUntilRenewal(s.renewal_date);
+        if (daysToRenew >= 0 && daysToRenew <= 45) {
+          upcomingRenewalsCount++;
+        }
       }
     }
   }
@@ -173,7 +262,11 @@ export function calculateMrrMetrics(prospects: Prospect[]): MrrMetrics {
   return {
     monthlyMrr,
     annualArr: monthlyMrr * 12,
+    annualContractsCount,
+    annualContractsTotal,
+    monthlyContractsCount,
     activeServicesCount,
-    activeClientsCount: clientIdsWithServices.size
+    activeClientsCount: clientIdsWithServices.size,
+    upcomingRenewalsCount
   };
 }

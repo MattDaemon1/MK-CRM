@@ -1,4 +1,4 @@
-import { CrmDatabase } from '../types/crm';
+import { CrmDatabase, DEFAULT_SERVICE_TYPES } from '../types/crm';
 
 export const INITIAL_DATABASE: CrmDatabase = {
   version: 1,
@@ -104,23 +104,25 @@ export const INITIAL_DATABASE: CrmDatabase = {
       active_services: [
         {
           id: 'srv-1',
-          name: 'Pack Sérénité Web & Sécurité',
+          name: 'Pack Sérénité Web & Sécurité (Annuel)',
           monthly_price: 320,
-          billing_cycle: 'Mensuel',
-          start_date: '2026-09-01',
-          renewal_date: '2027-09-01',
+          annual_price: 3840,
+          billing_cycle: 'Annuel',
+          start_date: '2025-11-01',
+          renewal_date: '2026-11-01',
           status: 'Actif',
-          notes: 'Mises à jour CMS, sauvegardes journalières, monitoring 99.9%'
+          notes: 'Mises à jour CMS, sauvegardes journalières, monitoring 99.9% - Échéance annuelle le 01/11'
         },
         {
           id: 'srv-2',
-          name: 'Hébergement Cloud Dédié Infogéré',
+          name: 'Hébergement Cloud Dédié Infogéré (Annuel)',
           monthly_price: 49,
-          billing_cycle: 'Mensuel',
-          start_date: '2026-09-01',
-          renewal_date: '2027-09-01',
+          annual_price: 588,
+          billing_cycle: 'Annuel',
+          start_date: '2025-11-01',
+          renewal_date: '2026-11-01',
           status: 'Actif',
-          notes: 'Serveur NVMe localisé en France, certificat SSL auto-renouvelé'
+          notes: 'Serveur NVMe France, certificat SSL - Échéance annuelle le 01/11'
         }
       ]
     },
@@ -378,5 +380,6 @@ export const INITIAL_DATABASE: CrmDatabase = {
         label: 'Cabinet Val de Loire Avocats'
       }
     }
-  ]
+  ],
+  custom_service_types: DEFAULT_SERVICE_TYPES
 };

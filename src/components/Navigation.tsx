@@ -56,7 +56,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'contracts' as ActiveTab,
-      label: 'Contrats & MRR',
+      label: 'Contrats & Abonnements',
       icon: Repeat,
       badge: activeMrrCount > 0 ? `${activeMrrCount} actifs` : null,
       badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'

@@ -13,11 +13,14 @@ import { Prospect } from '../../types/crm';
 import {
   FollowUpTone,
   generateFollowUpEmail,
+  generateRenewalEmail,
   getDaysSinceDate
 } from '../../services/followUpEngine';
+import { ActiveService } from '../../types/crm';
 
 interface FollowUpModalProps {
   prospect: Prospect | null;
+  contract?: ActiveService | null;
   isOpen: boolean;
   onClose: () => void;
   onMarkContactedToday: (prospectId: string, note?: string) => void;
@@ -26,6 +29,7 @@ interface FollowUpModalProps {
 
 export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   prospect,
+  contract,
   isOpen,
   onClose,
   onMarkContactedToday,
@@ -40,11 +44,17 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
 
   useEffect(() => {
     if (prospect) {
-      const emailData = generateFollowUpEmail(prospect, tone);
-      setSubject(emailData.subject);
-      setBody(emailData.body);
+      if (contract) {
+        const emailData = generateRenewalEmail(prospect, contract, tone);
+        setSubject(emailData.subject);
+        setBody(emailData.body);
+      } else {
+        const emailData = generateFollowUpEmail(prospect, tone);
+        setSubject(emailData.subject);
+        setBody(emailData.body);
+      }
     }
-  }, [prospect, tone]);
+  }, [prospect, contract, tone]);
 
   const daysSince = getDaysSinceDate(prospect.last_contact_date);
 
@@ -84,14 +94,20 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Assistant de Relance Intelligente
+                {contract ? 'Relance Renouvellement de Contrat' : 'Assistant de Relance Intelligente'}
                 <span className="text-xs font-normal text-slate-700 dark:text-slate-200">
                   · {prospect.company}
                 </span>
               </h3>
-              <p className="text-xs text-slate-700 dark:text-slate-200">
-                Dernier contact il y a <span className="font-semibold text-rose-600 dark:text-rose-400">{daysSince} jour(s)</span> ({prospect.last_contact_date})
-              </p>
+              {contract ? (
+                <p className="text-xs text-slate-700 dark:text-slate-200">
+                  Contrat : <strong className="text-indigo-600 dark:text-indigo-400">{contract.name}</strong> · Échéance : <span className="font-mono font-semibold">{contract.renewal_date}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-700 dark:text-slate-200">
+                  Dernier contact il y a <span className="font-semibold text-rose-600 dark:text-rose-400">{daysSince} jour(s)</span> ({prospect.last_contact_date})
+                </p>
+              )}
             </div>
           </div>
           <button

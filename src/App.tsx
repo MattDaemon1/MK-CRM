@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   CrmDatabase,
   Prospect,
   Ticket,
   DailyTask,
   ProspectStatus,
-  TicketStatus
+  TicketStatus,
+  ActiveService,
+  DEFAULT_SERVICE_TYPES
 } from './types/crm';
 import {
   loadDatabase,
@@ -14,7 +16,8 @@ import {
   exportDatabaseAsJson,
   parseAndValidateImport,
   calculatePipelineMetrics,
-  calculateMrrMetrics
+  calculateMrrMetrics,
+  syncDatabaseWithServer
 } from './services/storage';
 import { detectFollowUps } from './services/followUpEngine';
 import { Header } from './components/Header';
@@ -26,6 +29,7 @@ import { ContractsMrrView } from './components/contracts/ContractsMrrView';
 import { FollowUpModal } from './components/dashboard/FollowUpModal';
 import { ProspectModal } from './components/pipeline/ProspectModal';
 import { TicketModal } from './components/tickets/TicketModal';
+import { ContractModal } from './components/contracts/ContractModal';
 import { ClientDetailDrawer } from './components/contracts/ClientDetailDrawer';
 import { Toast } from './components/common/Toast';
 import { LoginView } from './components/auth/LoginView';
@@ -45,6 +49,10 @@ export default function App() {
   const [database, setDatabase] = useState<CrmDatabase>(() => loadDatabase());
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Multi-Device Sync State (PC <-> Mobile)
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+  const [lastSyncedTime, setLastSyncedTime] = useState<Date | null>(new Date());
 
   // Dark Mode
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -71,8 +79,11 @@ export default function App() {
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
 
+  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
   const [followUpProspect, setFollowUpProspect] = useState<Prospect | null>(null);
+  const [followUpContract, setFollowUpContract] = useState<ActiveService | null>(null);
 
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
   const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(null);
@@ -83,10 +94,66 @@ export default function App() {
     setToastMessage(msg);
   };
 
-  // Helper to commit DB changes
+  // Live Multi-Device Synchronization (PC <-> Mobile)
+  const handleSyncWithServer = useCallback(async (forceToast = false) => {
+    setSyncStatus('syncing');
+    const remoteDb = await syncDatabaseWithServer();
+    if (remoteDb && Array.isArray(remoteDb.prospects)) {
+      setDatabase((prevDb) => {
+        // If remote has newer data or previous was default
+        if (remoteDb.last_updated !== prevDb.last_updated) {
+          return remoteDb;
+        }
+        return prevDb;
+      });
+      setSyncStatus('synced');
+      setLastSyncedTime(new Date());
+      if (forceToast) {
+        showToast('🟢 Données synchronisées avec le serveur (PC ↔ Mobile)');
+      }
+    } else {
+      setSyncStatus('offline');
+      if (forceToast) {
+        showToast('⚠️ Impossible de joindre le serveur de synchro');
+      }
+    }
+  }, []);
+
+  // Initial Sync and background heartbeat polling
+  useEffect(() => {
+    // 1. Initial immediate sync on mount
+    handleSyncWithServer();
+
+    // 2. Poll every 4 seconds for live changes between mobile and PC
+    const interval = setInterval(() => {
+      handleSyncWithServer();
+    }, 4000);
+
+    // 3. Sync immediately when window gets focus or tab becomes visible
+    const handleFocus = () => handleSyncWithServer();
+    const handleVisibility = () => {
+      if (!document.hidden) handleSyncWithServer();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [handleSyncWithServer]);
+
+  // Helper to commit DB changes (local + server sync)
   const updateDb = (newDb: CrmDatabase) => {
-    setDatabase(newDb);
-    saveDatabase(newDb);
+    const updated: CrmDatabase = {
+      ...newDb,
+      last_updated: new Date().toISOString()
+    };
+    setDatabase(updated);
+    saveDatabase(updated);
+    setLastSyncedTime(new Date());
   };
 
   // 2. Computed Metrics
@@ -349,6 +416,107 @@ export default function App() {
     showToast('Toutes les tâches terminées ont été supprimées.');
   };
 
+  // 5b. Handlers: Service Types & Contracts
+  const handleAddServiceType = (newType: string) => {
+    const trimmed = newType.trim();
+    if (!trimmed) return;
+    const currentTypes = database.custom_service_types || DEFAULT_SERVICE_TYPES;
+    if (currentTypes.includes(trimmed)) return;
+
+    const updatedTypes = [...currentTypes, trimmed];
+    updateDb({
+      ...database,
+      custom_service_types: updatedTypes
+    });
+    showToast(`Type de prestation "${trimmed}" ajouté avec succès !`);
+  };
+
+  const handleOpenNewContract = (defaultClientId?: string) => {
+    setSelectedProspectId(defaultClientId || null);
+    setIsContractModalOpen(true);
+  };
+
+  const handleSaveContract = (clientId: string, contract: ActiveService) => {
+    const updatedProspects = database.prospects.map((p) => {
+      if (p.id === clientId) {
+        const newTimeline: TimelineEntry = {
+          id: `t-${Date.now()}`,
+          date: '2026-10-11 12:00',
+          type: 'note',
+          content: `Souscription contrat récurrent : ${contract.name} (${contract.billing_cycle === 'Annuel' ? `${contract.annual_price || contract.monthly_price * 12} €/an` : `${contract.monthly_price} €/m`}) - Échéance le ${contract.renewal_date}`
+        };
+
+        return {
+          ...p,
+          status: p.status === 'Lead entrant' || p.status === 'Contacté' || p.status === 'Proposition envoyée' ? 'Gagné' : p.status,
+          active_services: [...(p.active_services || []), contract],
+          timeline: [newTimeline, ...(p.timeline || [])]
+        };
+      }
+      return p;
+    });
+
+    updateDb({
+      ...database,
+      prospects: updatedProspects
+    });
+    showToast(`Contrat "${contract.name}" enregistré avec rappel de renouvellement !`);
+  };
+
+  const handleRenewContractOneYear = (clientId: string, contractId: string) => {
+    let clientName = '';
+    let contractName = '';
+    let nextDate = '';
+
+    const updatedProspects = database.prospects.map((p) => {
+      if (p.id === clientId) {
+        clientName = p.company;
+        const updatedServices = (p.active_services || []).map((s) => {
+          if (s.id === contractId) {
+            contractName = s.name;
+            const parts = (s.renewal_date || '2026-10-11').split('-');
+            const nextYear = Number(parts[0]) + 1;
+            nextDate = `${nextYear}-${parts[1] || '10'}-${parts[2] || '11'}`;
+
+            return {
+              ...s,
+              renewal_date: nextDate,
+              last_renewed_date: '2026-10-11',
+              status: 'Actif' as const
+            };
+          }
+          return s;
+        });
+
+        const newTimeline: TimelineEntry = {
+          id: `t-${Date.now()}`,
+          date: '2026-10-11 12:00',
+          type: 'note',
+          content: `Contrat "${contractName}" renouvelé pour +1 an. Nouvelle date d'échéance : ${nextDate}.`
+        };
+
+        return {
+          ...p,
+          active_services: updatedServices,
+          timeline: [newTimeline, ...(p.timeline || [])]
+        };
+      }
+      return p;
+    });
+
+    updateDb({
+      ...database,
+      prospects: updatedProspects
+    });
+    showToast(`Contrat "${contractName}" de ${clientName} reconduit jusqu'au ${nextDate} !`);
+  };
+
+  const handleOpenRenewalEmail = (client: Prospect, contract: ActiveService) => {
+    setFollowUpProspect(client);
+    setFollowUpContract(contract);
+    setIsFollowUpModalOpen(true);
+  };
+
   // 6. Backup & Restore
   const handleExport = () => {
     exportDatabaseAsJson(database);
@@ -418,6 +586,9 @@ export default function App() {
         database={database}
         currentUser="Matt"
         onLogout={handleLogout}
+        syncStatus={syncStatus}
+        lastSyncedTime={lastSyncedTime}
+        onTriggerSync={() => handleSyncWithServer(true)}
       />
 
       {/* Navigation Bar */}
@@ -457,6 +628,7 @@ export default function App() {
             mrrMetrics={mrrMetrics}
             onOpenFollowUpModal={(p) => {
               setFollowUpProspect(p);
+              setFollowUpContract(null);
               setIsFollowUpModalOpen(true);
             }}
             onMarkContactedToday={handleMarkContactedToday}
@@ -466,6 +638,8 @@ export default function App() {
             onClearCompletedTasks={handleClearCompletedTasks}
             onSelectProspect={(p) => setSelectedProspectId(p.id)}
             onNavigateToTab={(tab) => setActiveTab(tab)}
+            onOpenRenewalEmail={handleOpenRenewalEmail}
+            onRenewContractOneYear={handleRenewContractOneYear}
           />
         )}
 
@@ -477,10 +651,12 @@ export default function App() {
             onDeleteProspect={(p) => setProspectToDelete(p)}
             onOpenFollowUp={(p) => {
               setFollowUpProspect(p);
+              setFollowUpContract(null);
               setIsFollowUpModalOpen(true);
             }}
             onMoveStatus={handleMoveProspectStatus}
             onNewLead={() => handleOpenNewProspect('Lead entrant')}
+            availableServiceTypes={database.custom_service_types || DEFAULT_SERVICE_TYPES}
           />
         )}
 
@@ -491,12 +667,14 @@ export default function App() {
             onSelectProspect={(p) => setSelectedProspectId(p.id)}
             onOpenFollowUp={(p) => {
               setFollowUpProspect(p);
+              setFollowUpContract(null);
               setIsFollowUpModalOpen(true);
             }}
             onMoveStatus={handleMoveProspectStatus}
             onNewProspect={(initialStatus) => handleOpenNewProspect(initialStatus)}
             onEditProspect={handleEditProspect}
             onDeleteProspect={(p) => setProspectToDelete(p)}
+            availableServiceTypes={database.custom_service_types || DEFAULT_SERVICE_TYPES}
           />
         )}
 
@@ -517,6 +695,9 @@ export default function App() {
             prospects={database.prospects}
             mrrMetrics={mrrMetrics}
             onSelectProspect={(p) => setSelectedProspectId(p.id)}
+            onNewContract={() => handleOpenNewContract()}
+            onRenewContractOneYear={handleRenewContractOneYear}
+            onOpenRenewalEmail={handleOpenRenewalEmail}
           />
         )}
       </main>
@@ -524,8 +705,12 @@ export default function App() {
       {/* Modals & Slide-out Drawers */}
       <FollowUpModal
         prospect={followUpProspect}
+        contract={followUpContract}
         isOpen={isFollowUpModalOpen}
-        onClose={() => setIsFollowUpModalOpen(false)}
+        onClose={() => {
+          setIsFollowUpModalOpen(false);
+          setFollowUpContract(null);
+        }}
         onMarkContactedToday={handleMarkContactedToday}
         onShowToast={showToast}
       />
@@ -536,6 +721,8 @@ export default function App() {
         onSave={handleSaveProspect}
         editingProspect={editingProspect}
         initialStatus={initialProspectStatus}
+        availableServiceTypes={database.custom_service_types || DEFAULT_SERVICE_TYPES}
+        onAddServiceType={handleAddServiceType}
       />
 
       <TicketModal
@@ -546,6 +733,14 @@ export default function App() {
         prospects={database.prospects}
       />
 
+      <ContractModal
+        isOpen={isContractModalOpen}
+        onClose={() => setIsContractModalOpen(false)}
+        prospects={database.prospects}
+        onSaveContract={handleSaveContract}
+        defaultClientId={selectedProspectId || undefined}
+      />
+
       <ClientDetailDrawer
         prospect={selectedProspect}
         isOpen={selectedProspectId !== null}
@@ -554,6 +749,7 @@ export default function App() {
         onEditProspect={handleEditProspect}
         onOpenFollowUp={(p) => {
           setFollowUpProspect(p);
+          setFollowUpContract(null);
           setIsFollowUpModalOpen(true);
         }}
         onDeleteProspect={handleDeleteProspect}
@@ -585,8 +781,8 @@ export default function App() {
         confirmLabel="Réinitialiser"
         cancelLabel="Annuler"
         variant="warning"
-        onConfirm={() => {
-          const reset = resetDatabase();
+        onConfirm={async () => {
+          const reset = await resetDatabase();
           setDatabase(reset);
           setIsResetConfirmOpen(false);
           showToast('Données de démo réinitialisées avec succès !');

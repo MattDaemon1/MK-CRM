@@ -23,6 +23,7 @@ interface PipelineViewProps {
   onNewProspect: (initialStatus?: ProspectStatus) => void;
   onEditProspect?: (prospect: Prospect) => void;
   onDeleteProspect?: (prospect: Prospect) => void;
+  availableServiceTypes?: string[];
 }
 
 export const PipelineView: React.FC<PipelineViewProps> = ({
@@ -33,7 +34,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   onMoveStatus,
   onNewProspect,
   onEditProspect,
-  onDeleteProspect
+  onDeleteProspect,
+  availableServiceTypes = []
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -127,11 +129,11 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
           >
             <option value="all">Toutes prestations</option>
-            <option value="Refonte & Dev Web">Refonte & Dev Web</option>
-            <option value="IA & Automatisation">IA & Automatisation</option>
-            <option value="Workflows n8n">Workflows n8n</option>
-            <option value="Pack Sérénité (Maintenance)">Pack Sérénité</option>
-            <option value="Application sur-mesure">Application sur-mesure</option>
+            {Array.from(new Set([...availableServiceTypes, ...prospects.map((p) => p.service_type)])).filter(Boolean).map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
           </select>
         </div>
 

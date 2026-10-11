@@ -8,23 +8,34 @@ export type ProspectStatus =
 
 export type PriorityLevel = 'Chaud' | 'Tiède' | 'Froid';
 
-export type ServiceType =
-  | 'Refonte & Dev Web'
-  | 'IA & Automatisation'
-  | 'Workflows n8n'
-  | 'Pack Sérénité (Maintenance)'
-  | 'Application sur-mesure'
-  | 'Audit & Conseil';
+// Type de prestation extensible (ouvert aux ajouts personnalisés)
+export type ServiceType = string;
+
+export const DEFAULT_SERVICE_TYPES: string[] = [
+  'Refonte & Dev Web',
+  'IA & Automatisation',
+  'Workflows n8n',
+  'Pack Sérénité (Maintenance)',
+  'Application sur-mesure',
+  'Audit & Conseil',
+  'SEO & Référencement',
+  'Formation & Coaching',
+  'Hébergement & Infogérance'
+];
 
 export interface ActiveService {
   id: string;
   name: string;
-  monthly_price: number; // MRR en €
+  monthly_price: number; // Montant mensuel équivalent (MRR en €)
+  annual_price?: number; // Montant annuel si facturé à l'année (ex: 1200 € / an)
   billing_cycle: 'Mensuel' | 'Trimestriel' | 'Annuel';
   start_date: string;
   renewal_date: string;
   status: 'Actif' | 'En pause' | 'Résilié';
   notes?: string;
+  auto_renew?: boolean;
+  reminder_days_before?: number; // Prévenance en jours (ex: 30, 15, 7)
+  last_renewed_date?: string;
 }
 
 export interface TimelineEntry {
@@ -81,7 +92,7 @@ export interface DailyTask {
   completed: boolean;
   priority: 'Haute' | 'Moyenne' | 'Basse';
   related_to?: {
-    type: 'prospect' | 'ticket';
+    type: 'prospect' | 'ticket' | 'contract';
     id: string;
     label: string;
   };
@@ -93,4 +104,5 @@ export interface CrmDatabase {
   prospects: Prospect[];
   tickets: Ticket[];
   tasks: DailyTask[];
+  custom_service_types?: string[];
 }

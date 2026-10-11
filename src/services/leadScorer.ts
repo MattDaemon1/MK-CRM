@@ -41,34 +41,31 @@ export function computeLeadScore(params: {
   }
 
   // 2. Type de prestation & valeur stratégique (jusqu'à 30 pts)
-  switch (params.serviceType) {
-    case 'IA & Automatisation':
-      score += 30;
-      breakdown.push({ label: 'Prestation IA haute valeur', points: 30 });
-      break;
-    case 'Workflows n8n':
-      score += 28;
-      breakdown.push({ label: 'Automatisation n8n scalable', points: 28 });
-      break;
-    case 'Pack Sérénité (Maintenance)':
-      score += 25;
-      breakdown.push({ label: 'Potentiel MRR récurrent', points: 25 });
-      break;
-    case 'Application sur-mesure':
-      score += 25;
-      breakdown.push({ label: 'Développement sur-mesure', points: 25 });
-      break;
-    case 'Refonte & Dev Web':
-      score += 20;
-      breakdown.push({ label: 'Refonte web classique', points: 20 });
-      break;
-    case 'Audit & Conseil':
-      score += 18;
-      breakdown.push({ label: 'Mission conseil/audit', points: 18 });
-      break;
-    default:
-      score += 15;
-      breakdown.push({ label: 'Prestation standard', points: 15 });
+  const stLower = (params.serviceType || '').toLowerCase();
+  if (stLower.includes('ia') || stLower.includes('intelligence') || stLower.includes('llm') || stLower.includes('gpt')) {
+    score += 30;
+    breakdown.push({ label: 'Prestation IA haute valeur', points: 30 });
+  } else if (stLower.includes('n8n') || stLower.includes('automatisation') || stLower.includes('workflow')) {
+    score += 28;
+    breakdown.push({ label: 'Automatisation scalable', points: 28 });
+  } else if (stLower.includes('sérénité') || stLower.includes('maintenance') || stLower.includes('infogérance') || stLower.includes('support')) {
+    score += 25;
+    breakdown.push({ label: 'Potentiel MRR récurrent', points: 25 });
+  } else if (stLower.includes('sur-mesure') || stLower.includes('application') || stLower.includes('logiciel')) {
+    score += 25;
+    breakdown.push({ label: 'Développement sur-mesure', points: 25 });
+  } else if (stLower.includes('web') || stLower.includes('site') || stLower.includes('refonte') || stLower.includes('shopify') || stLower.includes('wordpress')) {
+    score += 22;
+    breakdown.push({ label: 'Développement & Refonte Web', points: 22 });
+  } else if (stLower.includes('audit') || stLower.includes('conseil') || stLower.includes('stratégie')) {
+    score += 20;
+    breakdown.push({ label: 'Mission conseil/audit', points: 20 });
+  } else if (stLower.includes('seo') || stLower.includes('marketing') || stLower.includes('design') || stLower.includes('branding')) {
+    score += 20;
+    breakdown.push({ label: 'Prestation Marketing/Design', points: 20 });
+  } else {
+    score += 20;
+    breakdown.push({ label: `Prestation sur-mesure (${params.serviceType || 'Standard'})`, points: 20 });
   }
 
   // 3. Source du lead (jusqu'à 15 pts)

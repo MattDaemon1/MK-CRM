@@ -18,6 +18,7 @@ import {
   ServiceType
 } from '../../types/crm';
 import { computeLeadScore, ScoreResult } from '../../services/leadScorer';
+import { Plus } from 'lucide-react';
 
 interface ProspectModalProps {
   isOpen: boolean;
@@ -25,15 +26,20 @@ interface ProspectModalProps {
   onSave: (prospect: Partial<Prospect>) => void;
   editingProspect: Prospect | null;
   initialStatus?: ProspectStatus;
+  availableServiceTypes?: string[];
+  onAddServiceType?: (newType: string) => void;
 }
 
-const SERVICE_OPTIONS: ServiceType[] = [
+const DEFAULT_SERVICE_OPTIONS: ServiceType[] = [
   'Refonte & Dev Web',
   'IA & Automatisation',
   'Workflows n8n',
   'Pack Sérénité (Maintenance)',
   'Application sur-mesure',
-  'Audit & Conseil'
+  'Audit & Conseil',
+  'SEO & Référencement',
+  'Formation & Coaching',
+  'Hébergement & Infogérance'
 ];
 
 const STATUS_OPTIONS: ProspectStatus[] = [
@@ -50,9 +56,14 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
   onClose,
   onSave,
   editingProspect,
-  initialStatus
+  initialStatus,
+  availableServiceTypes = DEFAULT_SERVICE_OPTIONS,
+  onAddServiceType
 }) => {
   if (!isOpen) return null;
+
+  const [isAddingCustomType, setIsAddingCustomType] = useState(false);
+  const [newCustomTypeName, setNewCustomTypeName] = useState('');
 
   const [company, setCompany] = useState(editingProspect?.company || '');
   const [contactName, setContactName] = useState(editingProspect?.contact_name || '');
@@ -278,20 +289,91 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
           {/* Service & Montant */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Type de Prestation
-              </label>
-              <select
-                value={serviceType}
-                onChange={(e) => setServiceType(e.target.value as ServiceType)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {SERVICE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Type de Prestation
+                </label>
+                {!isAddingCustomType ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCustomType(true)}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-medium cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Ajouter un type</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingCustomType(false);
+                      setNewCustomTypeName('');
+                    }}
+                    className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                )}
+              </div>
+
+              {!isAddingCustomType ? (
+                <select
+                  value={serviceType}
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setIsAddingCustomType(true);
+                    } else {
+                      setServiceType(e.target.value as ServiceType);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  {Array.from(new Set([...availableServiceTypes, serviceType])).filter(Boolean).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                  <option value="__add_new__">+ Ajouter un type personnalisé...</option>
+                </select>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newCustomTypeName}
+                    onChange={(e) => setNewCustomTypeName(e.target.value)}
+                    placeholder="Ex: Branding, Formation, Intégration..."
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-indigo-400 dark:border-indigo-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const trimmed = newCustomTypeName.trim();
+                        if (trimmed) {
+                          setServiceType(trimmed);
+                          if (onAddServiceType) onAddServiceType(trimmed);
+                          setIsAddingCustomType(false);
+                          setNewCustomTypeName('');
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newCustomTypeName.trim();
+                      if (trimmed) {
+                        setServiceType(trimmed);
+                        if (onAddServiceType) onAddServiceType(trimmed);
+                        setIsAddingCustomType(false);
+                        setNewCustomTypeName('');
+                      }
+                    }}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer shadow-xs"
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>

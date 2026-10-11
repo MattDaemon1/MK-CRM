@@ -176,3 +176,121 @@ Avez-vous pu avancer sur les éléments que nous avions évoqués ? Je me tiens 
 Bien cordialement,`
   };
 }
+
+export interface RenewalAlert {
+  id: string;
+  contract: import('../types/crm').ActiveService;
+  client: Prospect;
+  daysRemaining: number;
+  urgency: 'Critique' | 'Urgent' | 'À anticiper';
+  reason: string;
+  suggestedAction: string;
+}
+
+export function detectRenewalAlerts(prospects: Prospect[]): RenewalAlert[] {
+  const alerts: RenewalAlert[] = [];
+
+  for (const client of prospects) {
+    if (!client.active_services || !Array.isArray(client.active_services)) continue;
+
+    for (const srv of client.active_services) {
+      if (srv.status !== 'Actif' || !srv.renewal_date) continue;
+
+      const target = new Date(srv.renewal_date);
+      const diffTime = target.getTime() - REFERENCE_DATE.getTime();
+      const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // Alert if renewal is in less than 45 days or expired
+      if (days <= 45) {
+        let urgency: 'Critique' | 'Urgent' | 'À anticiper' = 'À anticiper';
+        let reason = `Renouvellement dans ${days} jour(s) (${srv.renewal_date})`;
+
+        if (days < 0) {
+          urgency = 'Critique';
+          reason = `Échéance dépassée depuis ${Math.abs(days)} jour(s) (${srv.renewal_date})`;
+        } else if (days <= 15) {
+          urgency = 'Urgent';
+          reason = `Renouvellement imminent : dans ${days} jour(s) (${srv.renewal_date})`;
+        }
+
+        const priceLabel = srv.annual_price
+          ? `${srv.annual_price.toLocaleString('fr-FR')} € / an`
+          : `${srv.monthly_price.toLocaleString('fr-FR')} € / mois`;
+
+        alerts.push({
+          id: `${client.id}-${srv.id}`,
+          contract: srv,
+          client,
+          daysRemaining: days,
+          urgency,
+          reason,
+          suggestedAction: `Contacter ${client.contact_name} pour valider la reconduction de ${srv.name} (${priceLabel})`
+        });
+      }
+    }
+  }
+
+  return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
+}
+
+export function generateRenewalEmail(
+  client: Prospect,
+  contract: import('../types/crm').ActiveService,
+  tone: FollowUpTone = 'professionnel'
+): { subject: string; body: string } {
+  const contact = client.contact_name || 'Bonjour';
+  const company = client.company || 'votre société';
+  const contractName = contract.name;
+  const renewalDate = contract.renewal_date;
+  const price = contract.annual_price
+    ? `${contract.annual_price.toLocaleString('fr-FR')} € HT / an`
+    : `${(contract.monthly_price * 12).toLocaleString('fr-FR')} € HT / an (${contract.monthly_price} €/mois)`;
+
+  if (tone === 'concis') {
+    return {
+      subject: `Renouvellement de votre contrat ${contractName} - ${company}`,
+      body: `Bonjour ${contact},
+
+Votre contrat ${contractName} pour ${company} arrive à échéance le ${renewalDate}.
+
+Je vous propose de reconduire la prestation pour une année supplémentaire aux conditions habituelles (${price}).
+Souhaitez-vous que je vous fasse parvenir la facture d'acompte ou le bon de renouvellement ?
+
+Bien cordialement,`
+    };
+  }
+
+  if (tone === 'chaleureux') {
+    return {
+      subject: `Bilan d'étape & renouvellement annuel de votre formule ${contractName}`,
+      body: `Bonjour ${contact},
+
+J'espère que vous allez très bien !
+
+Nous arrivons bientôt au terme de l'année pour votre contrat ${contractName} chez ${company} (date d'échéance : ${renewalDate}).
+C'est un plaisir de vous accompagner dans le maintien et l'optimisation de vos outils.
+
+Afin d'assurer la continuité de service sans interruption (mises à jour, support prioritaire et surveillance), je vous propose de renouveler notre engagement pour une nouvelle année (${price}).
+
+Avez-vous quelques minutes cette semaine pour un court échange téléphonique ?
+
+Très belle journée,`
+    };
+  }
+
+  return {
+    subject: `Renouvellement annuel - Contrat ${contractName} (${company})`,
+    body: `Bonjour ${contact},
+
+Je me permets de vous contacter car votre abonnement de maintenance et suivi ${contractName} pour ${company} arrive à échéance le ${renewalDate}.
+
+Pour continuer à bénéficier des services associés (maintenance préventive, sauvegardes, support réactif) et garantir la sécurité de vos environnements, je vous invite à confirmer la reconduction pour la période à venir.
+
+Montant de la période annuelle : ${price}.
+
+Je reste à votre disposition si vous avez la moindre question ou souhaitez faire évoluer le périmètre de la prestation.
+
+Bien cordialement,`
+  };
+}
+

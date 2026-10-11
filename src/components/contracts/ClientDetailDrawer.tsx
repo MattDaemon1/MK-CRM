@@ -65,9 +65,11 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   // New contract service form state
   const [isAddingService, setIsAddingService] = useState(false);
   const [serviceName, setServiceName] = useState('Pack Sérénité Maintenance');
-  const [monthlyPrice, setMonthlyPrice] = useState(250);
+  const [billingCycle, setBillingCycle] = useState<'Mensuel' | 'Trimestriel' | 'Annuel'>('Annuel');
+  const [monthlyPrice, setMonthlyPrice] = useState(100);
+  const [annualPrice, setAnnualPrice] = useState(1200);
   const [renewalDate, setRenewalDate] = useState('2027-10-11');
-  const [billingCycle, setBillingCycle] = useState<'Mensuel' | 'Trimestriel' | 'Annuel'>('Mensuel');
+  const [reminderDaysBefore, setReminderDaysBefore] = useState(30);
 
   const daysSince = getDaysSinceDate(prospect.last_contact_date);
 
@@ -120,24 +122,85 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
     e.preventDefault();
     if (!serviceName.trim()) return;
 
+    const calculatedMonthly = billingCycle === 'Annuel'
+      ? Math.round((Number(annualPrice) || 0) / 12)
+      : Number(monthlyPrice) || 0;
+
+    const calculatedAnnual = billingCycle === 'Annuel'
+      ? Number(annualPrice) || 0
+      : (Number(monthlyPrice) || 0) * 12;
+
     const newSrv: ActiveService = {
       id: `srv-${Date.now()}`,
       name: serviceName.trim(),
-      monthly_price: Number(monthlyPrice) || 0,
+      monthly_price: calculatedMonthly,
+      annual_price: calculatedAnnual,
       billing_cycle: billingCycle,
       start_date: '2026-10-11',
       renewal_date: renewalDate,
-      status: 'Actif'
+      status: 'Actif',
+      reminder_days_before: Number(reminderDaysBefore) || 30
+    };
+
+    const newTimelineEntry: TimelineEntry = {
+      id: `t-${Date.now()}`,
+      date: '2026-10-11 12:00',
+      type: 'note',
+      content: `Nouveau contrat ajouté : ${newSrv.name} (${billingCycle === 'Annuel' ? `${calculatedAnnual} €/an` : `${calculatedMonthly} €/mois`}, échéance le ${renewalDate})`
     };
 
     const updated: Prospect = {
       ...prospect,
-      active_services: [...(prospect.active_services || []), newSrv]
+      active_services: [...(prospect.active_services || []), newSrv],
+      timeline: [newTimelineEntry, ...(prospect.timeline || [])]
     };
 
     onUpdateProspect(updated);
     setIsAddingService(false);
-    onShowToast(`Contrat "${serviceName}" ajouté (+${monthlyPrice} €/m MRR) !`);
+    onShowToast(`Contrat "${serviceName}" activé (+${calculatedMonthly} €/m MRR) !`);
+  };
+
+  const handleRenewContractOneYear = (serviceId: string) => {
+    const srv = (prospect.active_services || []).find((s) => s.id === serviceId);
+    if (!srv) return;
+
+    // Advance renewal date by 1 year
+    let nextDate = '2027-11-01';
+    if (srv.renewal_date) {
+      const parts = srv.renewal_date.split('-');
+      if (parts.length === 3) {
+        const nextYear = Number(parts[0]) + 1;
+        nextDate = `${nextYear}-${parts[1]}-${parts[2]}`;
+      }
+    }
+
+    const updatedServices = (prospect.active_services || []).map((s) => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          renewal_date: nextDate,
+          last_renewed_date: '2026-10-11',
+          status: 'Actif' as const
+        };
+      }
+      return s;
+    });
+
+    const newTimelineEntry: TimelineEntry = {
+      id: `t-${Date.now()}`,
+      date: '2026-10-11 12:00',
+      type: 'note',
+      content: `Reconduction confirmée pour 1 an du contrat "${srv.name}". Nouvelle date de renouvellement : ${nextDate}.`
+    };
+
+    const updated: Prospect = {
+      ...prospect,
+      active_services: updatedServices,
+      timeline: [newTimelineEntry, ...(prospect.timeline || [])]
+    };
+
+    onUpdateProspect(updated);
+    onShowToast(`Contrat "${srv.name}" reconduit jusqu'au ${nextDate} !`);
   };
 
   const handleRemoveService = (serviceId: string) => {
@@ -419,61 +482,115 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Montant mensuel (€)
+                        Périodicité
+                      </label>
+                      <select
+                        value={billingCycle}
+                        onChange={(e) => {
+                          const cycle = e.target.value as 'Mensuel' | 'Trimestriel' | 'Annuel';
+                          setBillingCycle(cycle);
+                          if (cycle === 'Annuel') {
+                            setRenewalDate('2027-10-11');
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        <option value="Annuel">Annuel (recommandé)</option>
+                        <option value="Mensuel">Mensuel</option>
+                        <option value="Trimestriel">Trimestriel</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      {billingCycle === 'Annuel' ? (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Montant Annuel (€ HT)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={annualPrice}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 0;
+                              setAnnualPrice(val);
+                              setMonthlyPrice(Math.round(val / 12));
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            ≈ {Math.round(annualPrice / 12)} € / mois (MRR)
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Montant mensuel (€ HT)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="10"
+                            value={monthlyPrice}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 0;
+                              setMonthlyPrice(val);
+                              setAnnualPrice(val * 12);
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            = {monthlyPrice * 12} € / an (ARR)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Date de renouvellement / échéance
                       </label>
                       <input
-                        type="number"
-                        min="0"
-                        step="10"
-                        value={monthlyPrice}
-                        onChange={(e) => setMonthlyPrice(Number(e.target.value))}
-                        className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                        type="date"
+                        value={renewalDate}
+                        onChange={(e) => setRenewalDate(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                       />
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Facturation
+                        Rappel d'échéance
                       </label>
                       <select
-                        value={billingCycle}
-                        onChange={(e) =>
-                          setBillingCycle(e.target.value as 'Mensuel' | 'Trimestriel' | 'Annuel')
-                        }
+                        value={reminderDaysBefore}
+                        onChange={(e) => setReminderDaysBefore(Number(e.target.value))}
                         className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                       >
-                        <option value="Mensuel">Mensuel</option>
-                        <option value="Trimestriel">Trimestriel</option>
-                        <option value="Annuel">Annuel</option>
+                        <option value={30}>Alerter 30j avant (conseillé)</option>
+                        <option value={15}>Alerter 15j avant</option>
+                        <option value={7}>Alerter 7j avant</option>
+                        <option value={60}>Alerter 60j avant</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Date de renouvellement
-                    </label>
-                    <input
-                      type="date"
-                      value={renewalDate}
-                      onChange={(e) => setRenewalDate(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
-                    />
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
                       onClick={() => setIsAddingService(false)}
-                      className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
+                      className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 cursor-pointer"
                     >
                       Annuler
                     </button>
                     <button
                       type="submit"
-                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs"
                     >
-                      Ajouter
+                      Activer le contrat
                     </button>
                   </div>
                 </form>
@@ -486,40 +603,86 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                     Aucun contrat ou abonnement actif pour ce client.
                   </p>
                 ) : (
-                  prospect.active_services.map((srv) => (
-                    <div
-                      key={srv.id}
-                      className="p-3.5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">
-                            {srv.name}
-                          </span>
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                            {srv.status}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-700 dark:text-slate-200 mt-0.5">
-                          Renouvellement : <span className="font-mono">{srv.renewal_date}</span> ·{' '}
-                          {srv.billing_cycle}
-                        </p>
-                      </div>
+                  prospect.active_services.map((srv) => {
+                    const daysToRenew = srv.renewal_date
+                      ? Math.floor((new Date(srv.renewal_date).getTime() - new Date('2026-10-11').getTime()) / (1000 * 3600 * 24))
+                      : 999;
 
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                          {srv.monthly_price} €/m
-                        </span>
-                        <button
-                          onClick={() => handleRemoveService(srv.id)}
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                          title="Supprimer ce contrat"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                    return (
+                      <div
+                        key={srv.id}
+                        className="p-3.5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {srv.name}
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                              {srv.status}
+                            </span>
+                            <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-sm bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                              {srv.billing_cycle}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700 dark:text-slate-200 mt-1">
+                            <span>Échéance : <strong className="font-mono">{srv.renewal_date}</strong></span>
+                            <span>·</span>
+                            {daysToRenew < 0 ? (
+                              <span className="font-bold text-rose-600 dark:text-rose-400">
+                                Échu depuis {Math.abs(daysToRenew)} j
+                              </span>
+                            ) : daysToRenew <= 15 ? (
+                              <span className="font-bold text-amber-600 dark:text-amber-400">
+                                🔔 Urgent (dans {daysToRenew} j)
+                              </span>
+                            ) : daysToRenew <= 30 ? (
+                              <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                🔔 À anticiper (dans {daysToRenew} j)
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 dark:text-emerald-400">
+                                Dans {daysToRenew} jours
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              {srv.billing_cycle === 'Annuel'
+                                ? `${(srv.annual_price || srv.monthly_price * 12).toLocaleString('fr-FR')} € / an`
+                                : `${srv.monthly_price.toLocaleString('fr-FR')} € / mois`}
+                            </p>
+                            {srv.billing_cycle === 'Annuel' && (
+                              <p className="text-[10px] font-mono text-slate-400">
+                                {srv.monthly_price} €/m MRR
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleRenewContractOneYear(srv.id)}
+                              className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer"
+                              title="Reconduire ce contrat pour 1 an de plus"
+                            >
+                              +1 an
+                            </button>
+                            <button
+                              onClick={() => handleRemoveService(srv.id)}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                              title="Supprimer ce contrat"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

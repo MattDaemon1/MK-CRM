@@ -17,7 +17,7 @@ import {
   Square,
   Trash2
 } from 'lucide-react';
-import { Prospect, Ticket, DailyTask } from '../../types/crm';
+import { Prospect, Ticket, DailyTask, ActiveService } from '../../types/crm';
 import { StatCard } from './StatCard';
 import { FollowUpAlert } from '../../services/followUpEngine';
 import { PipelineMetrics, MrrMetrics } from '../../services/storage';
@@ -37,6 +37,8 @@ interface DailyDashboardProps {
   onClearCompletedTasks?: () => void;
   onSelectProspect: (prospect: Prospect) => void;
   onNavigateToTab: (tab: 'leads' | 'pipeline' | 'tickets' | 'contracts') => void;
+  onOpenRenewalEmail?: (client: Prospect, contract: ActiveService) => void;
+  onRenewContractOneYear?: (clientId: string, contractId: string) => void;
 }
 
 export const DailyDashboard: React.FC<DailyDashboardProps> = ({
@@ -53,7 +55,9 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
   onDeleteTask,
   onClearCompletedTasks,
   onSelectProspect,
-  onNavigateToTab
+  onNavigateToTab,
+  onOpenRenewalEmail,
+  onRenewContractOneYear
 }) => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'Haute' | 'Moyenne' | 'Basse'>('Haute');
@@ -69,9 +73,21 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
     (t) => t.status !== 'Résolu' && (t.priority === 'Bloquant' || t.priority === 'Normal')
   );
 
-  const pendingProposals = prospects.filter(
-    (p) => p.status === 'Proposition envoyée' || p.status === 'En attente de signature'
-  );
+  const upcomingRenewals = prospects
+    .flatMap((p) =>
+      (p.active_services || []).map((srv) => ({
+        ...srv,
+        client: p
+      }))
+    )
+    .filter((c) => {
+      if (c.status !== 'Actif' || !c.renewal_date) return false;
+      const target = new Date(c.renewal_date);
+      const diffTime = target.getTime() - new Date('2026-10-11').getTime();
+      const days = Math.floor(diffTime / (1000 * 3600 * 24));
+      return days <= 45;
+    })
+    .sort((a, b) => new Date(a.renewal_date).getTime() - new Date(b.renewal_date).getTime());
 
   const completedTasksCount = tasks.filter((t) => t.completed).length;
 
@@ -438,6 +454,96 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+
+          {/* Upcoming Contract & Subscription Renewals */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  🔔 Échéances de Contrats & Abonnements ({upcomingRenewals.length})
+                </h3>
+              </div>
+              <button
+                onClick={() => onNavigateToTab('contracts')}
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>Gérer contrats</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {upcomingRenewals.length === 0 ? (
+                <p className="text-xs text-center py-3 text-slate-700 dark:text-slate-200">
+                  Aucun contrat arrivant à échéance sous 45 jours.
+                </p>
+              ) : (
+                upcomingRenewals.slice(0, 3).map((item) => {
+                  const target = new Date(item.renewal_date);
+                  const days = Math.floor((target.getTime() - new Date('2026-10-11').getTime()) / (1000 * 3600 * 24));
+                  const priceLabel = item.annual_price
+                    ? `${item.annual_price.toLocaleString('fr-FR')} €/an`
+                    : `${item.monthly_price} €/m`;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => onSelectProspect(item.client)}
+                            className="text-xs font-bold text-slate-900 dark:text-white truncate hover:underline text-left cursor-pointer"
+                          >
+                            {item.client.company}
+                          </button>
+                          {days < 0 ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-sm bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                              Échu
+                            </span>
+                          ) : days <= 15 ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-sm bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                              J-{days}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-sm bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                              Dans {days}j
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-700 dark:text-slate-200 truncate">
+                          {item.name} · <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{priceLabel}</span>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {onOpenRenewalEmail && (
+                          <button
+                            onClick={() => onOpenRenewalEmail(item.client, item)}
+                            className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                            title="Générer email de renouvellement"
+                          >
+                            <Mail className="w-3 h-3" />
+                          </button>
+                        )}
+                        {onRenewContractOneYear && (
+                          <button
+                            onClick={() => onRenewContractOneYear(item.client.id, item.id)}
+                            className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
+                            title="Reconduire le contrat pour +1 an"
+                          >
+                            +1 an
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

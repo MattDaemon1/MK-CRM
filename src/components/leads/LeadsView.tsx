@@ -27,6 +27,7 @@ interface LeadsViewProps {
   onOpenFollowUp: (prospect: Prospect) => void;
   onMoveStatus: (prospectId: string, newStatus: ProspectStatus) => void;
   onNewLead: () => void;
+  availableServiceTypes?: string[];
 }
 
 const STATUS_OPTIONS: ProspectStatus[] = [
@@ -45,16 +46,19 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   onDeleteProspect,
   onOpenFollowUp,
   onMoveStatus,
-  onNewLead
+  onNewLead,
+  availableServiceTypes = []
 }) => {
   const [searchFilter, setSearchFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [serviceFilter, setServiceFilter] = useState<string>('all');
 
   // Filter leads (primarily non-won, non-lost, or all according to filter)
   const filtered = prospects.filter((p) => {
     if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (priorityFilter !== 'all' && p.priority !== priorityFilter) return false;
+    if (serviceFilter !== 'all' && p.service_type !== serviceFilter) return false;
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
       const matchComp = p.company.toLowerCase().includes(q);
@@ -159,6 +163,19 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
             <option value="Chaud">Chaud</option>
             <option value="Tiède">Tiède</option>
             <option value="Froid">Froid</option>
+          </select>
+
+          <select
+            value={serviceFilter}
+            onChange={(e) => setServiceFilter(e.target.value)}
+            className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+          >
+            <option value="all">Toutes prestations</option>
+            {Array.from(new Set([...availableServiceTypes, ...prospects.map((p) => p.service_type)])).filter(Boolean).map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
           </select>
         </div>
       </div>

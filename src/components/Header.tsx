@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { CrmDatabase } from '../types/crm';
 
+import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
+
 interface HeaderProps {
   darkMode: boolean;
   onToggleDarkMode: () => void;
@@ -25,6 +27,9 @@ interface HeaderProps {
   database: CrmDatabase;
   currentUser?: string;
   onLogout?: () => void;
+  syncStatus?: 'synced' | 'syncing' | 'offline';
+  lastSyncedTime?: Date | null;
+  onTriggerSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,7 +44,10 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   database,
   currentUser = 'Matt',
-  onLogout
+  onLogout,
+  syncStatus = 'synced',
+  lastSyncedTime,
+  onTriggerSync
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +79,20 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-bold text-base text-slate-900 dark:text-white tracking-tight">
                 MK CRM
               </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Local
-              </span>
+              <button
+                onClick={onTriggerSync}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
+                  syncStatus === 'offline'
+                    ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                }`}
+                title="Synchronisation live active : vos données sont partagées entre votre PC et votre Mobile. Cliquez pour forcer l'actualisation."
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'offline' ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+                <span className="hidden xs:inline">Synchro PC ↔ Mobile</span>
+                <span className="xs:hidden">Synchro</span>
+                {syncStatus === 'syncing' && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
+              </button>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-none">
               Pilotage Freelance & Agence
