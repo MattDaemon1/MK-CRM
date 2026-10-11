@@ -7,7 +7,8 @@ import {
   RotateCcw,
   Plus,
   Search,
-  HardDrive
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { CrmDatabase } from '../types/crm';
 
@@ -22,6 +23,8 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   database: CrmDatabase;
+  currentUser?: string;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,7 +37,9 @@ export const Header: React.FC<HeaderProps> = ({
   onReset,
   searchQuery,
   onSearchChange,
-  database
+  database,
+  currentUser = 'Matt',
+  onLogout
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,32 +55,28 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
     reader.readAsText(file);
-    // Reset file input value
     e.target.value = '';
   };
-
-  const prospectsCount = database.prospects.length;
-  const openTicketsCount = database.tickets.filter((t) => t.status !== 'Résolu').length;
 
   return (
     <header className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur-md dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Brand / Logo */}
+        {/* Brand / Logo: MK CRM */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center font-bold text-lg shadow-sm shadow-indigo-500/20">
-            K
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm shadow-indigo-500/20">
+            MK
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-base text-slate-900 dark:text-white tracking-tight">
-                Kroma CRM
+                MK CRM
               </span>
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Local
               </span>
             </div>
-            <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-none">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-none">
               Pilotage Freelance & Agence
             </p>
           </div>
@@ -84,18 +85,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Global Fast Search Bar */}
         <div className="flex-1 max-w-md hidden md:block">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-700 dark:text-slate-200" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Recherche rapide (client, MP41, devis, ticket...)"
-              className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-100 dark:bg-slate-800/80 border border-transparent focus:border-indigo-500 dark:focus:border-indigo-500 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-700 dark:placeholder-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-100 dark:bg-slate-800/80 border border-transparent focus:border-indigo-500 dark:focus:border-indigo-500 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-slate-100"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 ✕
               </button>
@@ -105,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Actions & Utilities */}
         <div className="flex items-center gap-2">
-          {/* Quick Add Dropdown or Buttons */}
+          {/* Quick Add Buttons */}
           <button
             onClick={onNewProspect}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 rounded-lg shadow-sm transition-all cursor-pointer"
@@ -166,6 +167,29 @@ export const Header: React.FC<HeaderProps> = ({
           >
             {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>
+
+          {/* User profile & Logout */}
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
+          <div className="flex items-center gap-2 pl-1">
+            <div className="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
+              <div className="w-5 h-5 rounded-md bg-indigo-600 text-white font-bold flex items-center justify-center text-[11px]">
+                {currentUser ? currentUser[0].toUpperCase() : 'M'}
+              </div>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 hidden sm:inline">
+                {currentUser}
+              </span>
+            </div>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                title="Se déconnecter"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </header>

@@ -1,6 +1,13 @@
-# Kroma CRM - CRM Local pour Freelance & Agence
+# MK CRM - CRM Local pour Freelance & Agence
 
 CRM sur-mesure, ultra-rapide, orienté productivité et zéro clic superflu. Conçu pour le pilotage d'activité commerciale, les relances intelligentes, le support et le suivi des revenus récurrents (MRR).
+
+---
+
+## 🔐 Identifiants de Connexion
+
+- **Identifiant :** `Matt`
+- **Mot de passe :** `Maboule35!`
 
 ---
 
@@ -18,7 +25,9 @@ CRM sur-mesure, ultra-rapide, orienté productivité et zéro clic superflu. Con
 │   │   ├── leadScorer.ts          # Moteur de scoring 1-100 & priorisation (Chaud / Tiède / Froid)
 │   │   └── followUpEngine.ts      # Détection des relances prioritaires & générateur d'emails personnalisés
 │   ├── components/
-│   │   ├── Header.tsx             # Barre d'en-tête, recherche globale, mode sombre, sauvegarde JSON
+│   │   ├── auth/
+│   │   │   └── LoginView.tsx      # Page de connexion sécurisée (Matt / Maboule35!)
+│   │   ├── Header.tsx             # Barre d'en-tête MK CRM, profil, mode sombre, sauvegarde JSON
 │   │   ├── Navigation.tsx         # Onglets avec compteurs d'alertes en temps réel
 │   │   ├── dashboard/
 │   │   │   ├── DailyDashboard.tsx # Cockpit du jour (Relances prioritaires, To-Do list, KPI cards)
@@ -38,7 +47,7 @@ CRM sur-mesure, ultra-rapide, orienté productivité et zéro clic superflu. Con
 │   │   │   └── ClientDetailDrawer.tsx # Tiroir fiche client (contrats actifs, timeline d'échanges)
 │   │   └── common/
 │   │       └── Toast.tsx          # Notifications discrètes d'action
-│   ├── App.tsx                    # Orchestration de l'état principal et synchronisation
+│   ├── App.tsx                    # Orchestration de l'état principal, auth et synchronisation
 │   ├── main.tsx                   # Point d'entrée React 19
 │   └── index.css                  # Styles Tailwind CSS et Dark/Light mode
 ├── index.html                     # Point d'entrée HTML
@@ -64,7 +73,7 @@ npm install
 npm run dev
 ```
 
-Ouvrez votre navigateur sur **http://localhost:3000** (ou l'URL affichée dans votre terminal).
+Ouvrez votre navigateur sur **http://localhost:3000** et connectez-vous avec `Matt` / `Maboule35!`.
 
 ### 3. Build pour la production (optionnel)
 ```bash

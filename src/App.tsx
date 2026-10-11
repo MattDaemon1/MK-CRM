@@ -28,8 +28,17 @@ import { ProspectModal } from './components/pipeline/ProspectModal';
 import { TicketModal } from './components/tickets/TicketModal';
 import { ClientDetailDrawer } from './components/contracts/ClientDetailDrawer';
 import { Toast } from './components/common/Toast';
+import { LoginView } from './components/auth/LoginView';
 
 export default function App() {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return (
+      localStorage.getItem('mk_crm_auth_user') === 'Matt' ||
+      sessionStorage.getItem('mk_crm_auth_user') === 'Matt'
+    );
+  });
+
   // 1. Initial State
   const [database, setDatabase] = useState<CrmDatabase>(() => loadDatabase());
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -346,6 +355,26 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('mk_crm_auth_user');
+    sessionStorage.removeItem('mk_crm_auth_user');
+    setIsAuthenticated(false);
+    showToast('Déconnexion réussie. À bientôt Matt !');
+  };
+
+  // If not logged in, show Login view
+  if (!isAuthenticated) {
+    return (
+      <LoginView
+        onLoginSuccess={(user) => {
+          setIsAuthenticated(true);
+          showToast(`Connexion réussie ! Bienvenue ${user}.`);
+        }}
+        darkMode={darkMode}
+      />
+    );
+  }
+
   // 7. Global Search Filter results if any
   const displayedProspects = useMemo(() => {
     if (!searchQuery.trim()) return database.prospects;
@@ -373,6 +402,8 @@ export default function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         database={database}
+        currentUser="Matt"
+        onLogout={handleLogout}
       />
 
       {/* Navigation Bar */}
