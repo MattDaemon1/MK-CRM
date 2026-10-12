@@ -66,14 +66,18 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
   // New contract service form state
   const [isAddingService, setIsAddingService] = useState(false);
-  const [serviceName, setServiceName] = useState('Création de site web sur-mesure');
+  const [serviceName, setServiceName] = useState('');
   const [billingCycle, setBillingCycle] = useState<'Ponctuel' | 'Mensuel' | 'Trimestriel' | 'Annuel'>('Ponctuel');
   const [category, setCategory] = useState<'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre'>('Projet / Création');
-  const [oneOffPrice, setOneOffPrice] = useState(3500);
-  const [monthlyPrice, setMonthlyPrice] = useState(100);
-  const [annualPrice, setAnnualPrice] = useState(1200);
-  const [startDate, setStartDate] = useState('2026-10-11');
-  const [renewalDate, setRenewalDate] = useState('2027-10-11');
+  const [oneOffPrice, setOneOffPrice] = useState<number | ''>('');
+  const [monthlyPrice, setMonthlyPrice] = useState<number | ''>('');
+  const [annualPrice, setAnnualPrice] = useState<number | ''>('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [renewalDate, setRenewalDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  });
   const [reminderDaysBefore, setReminderDaysBefore] = useState(30);
 
   const daysSince = prospect ? getDaysSinceDate(prospect.last_contact_date) : 0;
@@ -151,11 +155,11 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
       name: serviceName.trim(),
       monthly_price: calculatedMonthly,
       annual_price: calculatedAnnual,
-      one_off_price: isOneOff ? Number(oneOffPrice) || 0 : undefined,
+      one_off_price: isOneOff ? (oneOffPrice === '' ? 0 : Number(oneOffPrice)) : undefined,
       billing_cycle: billingCycle,
       category,
-      start_date: startDate || '2026-10-11',
-      renewal_date: isOneOff ? (startDate || '2026-10-11') : renewalDate,
+      start_date: startDate || new Date().toISOString().slice(0, 10),
+      renewal_date: isOneOff ? (startDate || new Date().toISOString().slice(0, 10)) : renewalDate,
       status: 'Actif',
       reminder_days_before: isOneOff ? undefined : Number(reminderDaysBefore) || 30
     };
@@ -589,19 +593,15 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                           type="button"
                           onClick={() => {
                             setCategory(cat);
-                            if (cat === 'Projet / Création') {
-                              setServiceName('Création de site web vitrine');
+                            if (cat === 'Projet / Création' && !serviceName) {
+                              setServiceName('Création de site web');
                               setBillingCycle('Ponctuel');
-                              setOneOffPrice(3500);
-                            } else if (cat === 'Maintenance') {
-                              setServiceName('Pack Sérénité Maintenance');
+                            } else if (cat === 'Maintenance' && !serviceName) {
+                              setServiceName('Maintenance & Support');
                               setBillingCycle('Annuel');
-                              setAnnualPrice(1200);
-                              setMonthlyPrice(100);
-                            } else if (cat === 'Évolution') {
-                              setServiceName('Évolution module / Automatisation n8n');
+                            } else if (cat === 'Évolution' && !serviceName) {
+                              setServiceName('Évolution applicative');
                               setBillingCycle('Ponctuel');
-                              setOneOffPrice(1800);
                             }
                           }}
                           className={`text-[9px] py-1 px-1.5 rounded-md border font-medium text-center transition-all cursor-pointer ${
@@ -626,7 +626,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                       list="client-drawer-services-list"
                       value={serviceName}
                       onChange={(e) => setServiceName(e.target.value)}
-                      placeholder="Création site vitrine, Refonte e-commerce, Évolution n8n, Pack Sérénité..."
+                      placeholder="Ex: Création site web, Maintenance, Évolution module..."
                       className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                     />
                     <datalist id="client-drawer-services-list">
@@ -634,40 +634,6 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                         <option key={st} value={st} />
                       ))}
                     </datalist>
-
-                    {/* Quick suggestion chips */}
-                    <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                      {['Création site web WordPress', 'Évolution module n8n', 'Pack Sérénité (Maintenance)', 'Hébergement Dédié'].map((st) => (
-                        <button
-                          key={st}
-                          type="button"
-                          onClick={() => {
-                            setServiceName(st);
-                            if (st.includes('Création')) {
-                              setBillingCycle('Ponctuel');
-                              setCategory('Projet / Création');
-                              setOneOffPrice(3800);
-                            } else if (st.includes('Évolution')) {
-                              setBillingCycle('Ponctuel');
-                              setCategory('Évolution');
-                              setOneOffPrice(1500);
-                            } else if (st.includes('Sérénité')) {
-                              setBillingCycle('Annuel');
-                              setCategory('Maintenance');
-                              setAnnualPrice(1200);
-                              setMonthlyPrice(100);
-                            }
-                          }}
-                          className={`text-[9px] px-1.5 py-0.5 rounded border transition-all cursor-pointer ${
-                            serviceName === st
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
-                          }`}
-                        >
-                          {st}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -702,10 +668,10 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                           <input
                             type="number"
                             min="0"
-                            step="50"
-                            required
+                            step="10"
+                            placeholder="Montant libre"
                             value={oneOffPrice}
-                            onChange={(e) => setOneOffPrice(Number(e.target.value) || 0)}
+                            onChange={(e) => setOneOffPrice(e.target.value === '' ? '' : Number(e.target.value))}
                             className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                           />
                         </div>
@@ -717,17 +683,18 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                           <input
                             type="number"
                             min="0"
-                            step="50"
+                            step="10"
+                            placeholder="Montant libre par an"
                             value={annualPrice}
                             onChange={(e) => {
-                              const val = Number(e.target.value) || 0;
+                              const val = e.target.value === '' ? '' : Number(e.target.value);
                               setAnnualPrice(val);
-                              setMonthlyPrice(Math.round(val / 12));
+                              setMonthlyPrice(val === '' ? '' : Math.round(Number(val) / 12));
                             }}
                             className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                           />
                           <p className="text-[10px] text-slate-500 mt-0.5">
-                            ≈ {Math.round(annualPrice / 12)} € / mois (MRR)
+                            Équivalent MRR : {annualPrice !== '' ? `≈ ${Math.round(Number(annualPrice) / 12)} € / mois` : '—'}
                           </p>
                         </div>
                       ) : (
@@ -739,16 +706,17 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                             type="number"
                             min="0"
                             step="10"
+                            placeholder="Montant libre par mois"
                             value={monthlyPrice}
                             onChange={(e) => {
-                              const val = Number(e.target.value) || 0;
+                              const val = e.target.value === '' ? '' : Number(e.target.value);
                               setMonthlyPrice(val);
-                              setAnnualPrice(val * 12);
+                              setAnnualPrice(val === '' ? '' : Number(val) * 12);
                             }}
                             className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                           />
                           <p className="text-[10px] text-slate-500 mt-0.5">
-                            = {monthlyPrice * 12} € / an (ARR)
+                            Équivalent ARR : {monthlyPrice !== '' ? `${Number(monthlyPrice) * 12} € / an` : '—'}
                           </p>
                         </div>
                       )}

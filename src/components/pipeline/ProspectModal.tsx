@@ -74,18 +74,18 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
   const [status, setStatus] = useState<ProspectStatus>(
     editingProspect?.status || initialStatus || 'Lead entrant'
   );
-  const [estimatedValue, setEstimatedValue] = useState<number>(
-    editingProspect?.estimated_value || 3500
+  const [estimatedValue, setEstimatedValue] = useState<number | ''>(
+    editingProspect?.estimated_value ?? ''
   );
   const [lastContactDate, setLastContactDate] = useState<string>(
-    editingProspect?.last_contact_date || '2026-10-11'
+    editingProspect?.last_contact_date || new Date().toISOString().slice(0, 10)
   );
   const [notes, setNotes] = useState<string>(
     editingProspect?.notes ? editingProspect.notes.join('\n') : ''
   );
 
   // Manual score override toggle or auto
-  const [manualScore, setManualScore] = useState<number>(editingProspect?.lead_score || 80);
+  const [manualScore, setManualScore] = useState<number>(editingProspect?.lead_score || 70);
   const [isManualOverride, setIsManualOverride] = useState<boolean>(false);
 
   // Sync state whenever editingProspect or modal open status changes
@@ -110,10 +110,10 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
       setSource('Formulaire de contact web');
       setServiceType('Refonte & Dev Web');
       setStatus(initialStatus || 'Lead entrant');
-      setEstimatedValue(3500);
-      setLastContactDate('2026-10-11');
+      setEstimatedValue('');
+      setLastContactDate(new Date().toISOString().slice(0, 10));
       setNotes('');
-      setManualScore(80);
+      setManualScore(70);
     }
     setIsManualOverride(false);
   }, [editingProspect, initialStatus, isOpen]);
@@ -385,9 +385,10 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
                 <input
                   type="number"
                   min="0"
-                  step="100"
+                  step="50"
+                  placeholder="Ex: 2500 (ou laisser vide)"
                   value={estimatedValue}
-                  onChange={(e) => setEstimatedValue(Number(e.target.value))}
+                  onChange={(e) => setEstimatedValue(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>

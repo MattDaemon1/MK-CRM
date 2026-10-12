@@ -1,7 +1,7 @@
 import { INITIAL_DATABASE } from '../data/initialData';
 import { CrmDatabase, Prospect, Ticket, DailyTask, DEFAULT_SERVICE_TYPES } from '../types/crm';
 
-const STORAGE_KEY = 'mk_crm_database_v2';
+const STORAGE_KEY = 'mk_crm_database_v3';
 const REFERENCE_DATE = new Date('2026-10-11');
 
 // Safe storage wrapper protecting against iframe SecurityError

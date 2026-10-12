@@ -25,16 +25,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
   const [selectedClientId, setSelectedClientId] = useState<string>(
     defaultClientId || eligibleClients[0]?.id || ''
   );
-  const [contractName, setContractName] = useState('Création de site web sur-mesure');
+  const [contractName, setContractName] = useState('');
   const [billingCycle, setBillingCycle] = useState<'Ponctuel' | 'Annuel' | 'Mensuel' | 'Trimestriel'>('Ponctuel');
   const [category, setCategory] = useState<'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre'>('Projet / Création');
-  const [oneOffPrice, setOneOffPrice] = useState<number>(3500);
-  const [annualPrice, setAnnualPrice] = useState<number>(1200);
-  const [monthlyPrice, setMonthlyPrice] = useState<number>(100);
-  const [startDate, setStartDate] = useState('2026-10-11');
-  const [renewalDate, setRenewalDate] = useState('2027-10-11');
+  const [oneOffPrice, setOneOffPrice] = useState<number | ''>('');
+  const [annualPrice, setAnnualPrice] = useState<number | ''>('');
+  const [monthlyPrice, setMonthlyPrice] = useState<number | ''>('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [renewalDate, setRenewalDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  });
   const [reminderDays, setReminderDays] = useState<number>(30);
-  const [notes, setNotes] = useState('Cahier des charges, livrables convenus et accompagnement.');
+  const [notes, setNotes] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +63,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
       name: contractName.trim(),
       monthly_price: calculatedMonthly,
       annual_price: calculatedAnnual,
-      one_off_price: isOneOff ? Number(oneOffPrice) || 0 : undefined,
+      one_off_price: isOneOff ? (oneOffPrice === '' ? 0 : Number(oneOffPrice)) : undefined,
       billing_cycle: billingCycle,
       category,
       start_date: startDate,
@@ -141,19 +145,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                   type="button"
                   onClick={() => {
                     setCategory(cat);
-                    if (cat === 'Projet / Création') {
-                      setContractName('Création de site web vitrine');
+                    if (cat === 'Projet / Création' && !contractName) {
+                      setContractName('Création de site web');
                       setBillingCycle('Ponctuel');
-                      setOneOffPrice(3500);
-                    } else if (cat === 'Maintenance') {
-                      setContractName('Pack Sérénité Maintenance');
+                    } else if (cat === 'Maintenance' && !contractName) {
+                      setContractName('Maintenance & Support');
                       setBillingCycle('Annuel');
-                      setAnnualPrice(1200);
-                      setMonthlyPrice(100);
-                    } else if (cat === 'Évolution') {
-                      setContractName('Évolution module / Automatisation n8n');
+                    } else if (cat === 'Évolution' && !contractName) {
+                      setContractName('Évolution applicative');
                       setBillingCycle('Ponctuel');
-                      setOneOffPrice(1800);
                     }
                   }}
                   className={`text-[10px] py-1.5 px-2 rounded-lg border font-medium transition-all text-center cursor-pointer ${
@@ -273,15 +273,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                   <input
                     type="number"
                     min="0"
-                    step="50"
-                    required
+                    step="10"
                     value={oneOffPrice}
-                    onChange={(e) => setOneOffPrice(Number(e.target.value) || 0)}
-                    placeholder="Ex: 3500"
+                    onChange={(e) => setOneOffPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Montant libre (ex: 2800)"
                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Montant facturé à la livraison ou selon jalons
+                    Montant libre facturé selon devis
                   </p>
                 </div>
               ) : billingCycle === 'Annuel' ? (
@@ -292,17 +291,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                   <input
                     type="number"
                     min="0"
-                    step="50"
+                    step="10"
                     value={annualPrice}
+                    placeholder="Montant libre par an"
                     onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
                       setAnnualPrice(val);
-                      setMonthlyPrice(Math.round(val / 12));
+                      setMonthlyPrice(val === '' ? '' : Math.round(Number(val) / 12));
                     }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Équivalent MRR : ≈ {Math.round(annualPrice / 12)} € / mois
+                    Équivalent MRR : {annualPrice !== '' ? `≈ ${Math.round(Number(annualPrice) / 12)} € / mois` : '—'}
                   </p>
                 </div>
               ) : (
@@ -315,15 +315,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     min="0"
                     step="10"
                     value={monthlyPrice}
+                    placeholder="Montant libre par mois"
                     onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
                       setMonthlyPrice(val);
-                      setAnnualPrice(val * 12);
+                      setAnnualPrice(val === '' ? '' : Number(val) * 12);
                     }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Équivalent ARR : {monthlyPrice * 12} € / an
+                    Équivalent ARR : {monthlyPrice !== '' ? `${Number(monthlyPrice) * 12} € / an` : '—'}
                   </p>
                 </div>
               )}
