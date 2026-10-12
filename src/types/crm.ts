@@ -26,12 +26,14 @@ export const DEFAULT_SERVICE_TYPES: string[] = [
 export interface ActiveService {
   id: string;
   name: string;
-  monthly_price: number; // Montant mensuel équivalent (MRR en €)
+  monthly_price: number; // Montant mensuel équivalent (MRR en €) ou 0 si prestation ponctuelle
   annual_price?: number; // Montant annuel si facturé à l'année (ex: 1200 € / an)
-  billing_cycle: 'Mensuel' | 'Trimestriel' | 'Annuel';
+  one_off_price?: number; // Montant forfaitaire si prestation ponctuelle (ex: 3500 € HT)
+  billing_cycle: 'Ponctuel' | 'Mensuel' | 'Trimestriel' | 'Annuel';
+  category?: 'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre';
   start_date: string;
   renewal_date: string;
-  status: 'Actif' | 'En pause' | 'Résilié';
+  status: 'Actif' | 'Terminé' | 'En pause' | 'Résilié';
   notes?: string;
   auto_renew?: boolean;
   reminder_days_before?: number; // Prévenance en jours (ex: 30, 15, 7)

@@ -41,9 +41,9 @@ export const TicketListView: React.FC<TicketListViewProps> = ({
     if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchComp = t.client_company.toLowerCase().includes(q);
-      const matchDesc = t.description.toLowerCase().includes(q);
+      const matchTitle = (t.title || '').toLowerCase().includes(q);
+      const matchComp = (t.client_company || '').toLowerCase().includes(q);
+      const matchDesc = (t.description || '').toLowerCase().includes(q);
       if (!matchTitle && !matchComp && !matchDesc) return false;
     }
     return true;

@@ -42,10 +42,10 @@ interface DailyDashboardProps {
 }
 
 export const DailyDashboard: React.FC<DailyDashboardProps> = ({
-  prospects,
-  tickets,
-  tasks,
-  followUpAlerts,
+  prospects = [],
+  tickets = [],
+  tasks = [],
+  followUpAlerts = [],
   pipelineMetrics,
   mrrMetrics,
   onOpenFollowUpModal,
@@ -62,6 +62,11 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'Haute' | 'Moyenne' | 'Basse'>('Haute');
 
+  const safeProspects = Array.isArray(prospects) ? prospects : [];
+  const safeTickets = Array.isArray(tickets) ? tickets : [];
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const safeAlerts = Array.isArray(followUpAlerts) ? followUpAlerts : [];
+
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
@@ -69,11 +74,11 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
     setNewTaskTitle('');
   };
 
-  const blockingTickets = tickets.filter(
+  const blockingTickets = safeTickets.filter(
     (t) => t.status !== 'Résolu' && (t.priority === 'Bloquant' || t.priority === 'Normal')
   );
 
-  const upcomingRenewals = prospects
+  const upcomingRenewals = safeProspects
     .flatMap((p) =>
       (p.active_services || []).map((srv) => ({
         ...srv,
@@ -89,7 +94,11 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
     })
     .sort((a, b) => new Date(a.renewal_date).getTime() - new Date(b.renewal_date).getTime());
 
-  const completedTasksCount = tasks.filter((t) => t.completed).length;
+  const completedTasksCount = safeTasks.filter((t) => t.completed).length;
+
+  const pendingProposals = safeProspects.filter(
+    (p) => p.status === 'Proposition envoyée' || p.status === 'En attente de signature'
+  );
 
   return (
     <div className="space-y-6">
@@ -106,12 +115,12 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
         <div className="flex items-center gap-3 text-xs text-slate-700 dark:text-slate-200">
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            {tasks.length - completedTasksCount} tâches restantes
+            {safeTasks.length - completedTasksCount} tâches restantes
           </span>
           <span>·</span>
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            {followUpAlerts.length} relances requises
+            {safeAlerts.length} relances requises
           </span>
         </div>
       </div>
@@ -137,21 +146,21 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
 
         <StatCard
           title="Relances Prioritaires"
-          value={followUpAlerts.length}
+          value={safeAlerts.length}
           subtitle={
-            followUpAlerts.length > 0
+            safeAlerts.length > 0
               ? 'Leads entrants & devis sans réponse'
               : 'Aucune relance en retard !'
           }
           icon={Clock}
-          colorScheme={followUpAlerts.length > 0 ? 'rose' : 'emerald'}
-          badge={followUpAlerts.filter((a) => a.urgency === 'Critique').length ? 'Critique' : undefined}
+          colorScheme={safeAlerts.length > 0 ? 'rose' : 'emerald'}
+          badge={safeAlerts.filter((a) => a.urgency === 'Critique').length ? 'Critique' : undefined}
         />
 
         <StatCard
           title="Support & Maintenance"
-          value={tickets.filter((t) => t.status !== 'Résolu').length}
-          subtitle={`${tickets.filter((t) => t.priority === 'Bloquant' && t.status !== 'Résolu').length} bloquant(s) · Pack Sérénité`}
+          value={safeTickets.filter((t) => t.status !== 'Résolu').length}
+          subtitle={`${safeTickets.filter((t) => t.priority === 'Bloquant' && t.status !== 'Résolu').length} bloquant(s) · Pack Sérénité`}
           icon={LifeBuoy}
           colorScheme="amber"
         />
@@ -169,7 +178,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Moteur Intelligent de Relances ({followUpAlerts.length})
+                    Moteur Intelligent de Relances ({safeAlerts.length})
                   </h2>
                   <p className="text-xs text-slate-700 dark:text-slate-200">
                     Détection automatique selon le statut et les jours d'inactivité
@@ -185,7 +194,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
               </button>
             </div>
 
-            {followUpAlerts.length === 0 ? (
+            {safeAlerts.length === 0 ? (
               <div className="py-8 text-center text-slate-700 dark:text-slate-200">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
                 <p className="text-xs font-semibold">Toutes vos opportunités sont à jour !</p>
@@ -193,7 +202,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {followUpAlerts.map((alert) => {
+                {safeAlerts.map((alert) => {
                   const p = alert.prospect;
                   const isCritique = alert.urgency === 'Critique';
                   return (
@@ -347,7 +356,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  {completedTasksCount} / {tasks.length} faites
+                  {completedTasksCount} / {safeTasks.length} faites
                 </span>
                 {completedTasksCount > 0 && onClearCompletedTasks && (
                   <button
@@ -392,12 +401,12 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
 
             {/* Task Items */}
             <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-              {tasks.length === 0 ? (
+              {safeTasks.length === 0 ? (
                 <p className="text-xs text-center py-4 text-slate-700 dark:text-slate-200">
                   Aucune tâche programmée pour aujourd'hui.
                 </p>
               ) : (
-                tasks.map((task) => (
+                safeTasks.map((task) => (
                   <div
                     key={task.id}
                     className={`group flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${

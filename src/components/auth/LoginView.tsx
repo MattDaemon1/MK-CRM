@@ -13,20 +13,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, darkMode }
   const [error, setError] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
 
+  const handleQuickLogin = () => {
+    try {
+      localStorage.setItem('mk_crm_auth_user', 'Matt');
+      sessionStorage.setItem('mk_crm_auth_user', 'Matt');
+    } catch (e) {}
+    onLoginSuccess('Matt');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     // Exact requested credentials: Matt / Maboule35!
-    if (username.trim() === 'Matt' && password === 'Maboule35!') {
-      if (rememberMe) {
-        localStorage.setItem('mk_crm_auth_user', 'Matt');
-      } else {
-        sessionStorage.setItem('mk_crm_auth_user', 'Matt');
-      }
+    if (username.trim().toLowerCase() === 'matt' && password === 'Maboule35!') {
+      try {
+        if (rememberMe) {
+          localStorage.setItem('mk_crm_auth_user', 'Matt');
+        } else {
+          sessionStorage.setItem('mk_crm_auth_user', 'Matt');
+        }
+      } catch (e) {}
       onLoginSuccess('Matt');
     } else {
-      setError('Identifiant ou mot de passe incorrect.');
+      setError('Identifiant ou mot de passe incorrect. (Indice : Matt / Maboule35!)');
     }
   };
 
@@ -48,6 +58,25 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, darkMode }
 
         {/* Card Form */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none">
+          {/* 1-Click Fast Login Banner */}
+          <div className="mb-5 p-3.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 rounded-xl flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                Session de travail Matt
+              </p>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                Accédez immédiatement à votre cockpit CRM
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleQuickLogin}
+              className="py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer whitespace-nowrap"
+            >
+              Entrer en 1 clic
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="p-3 text-xs rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 font-medium">
@@ -96,6 +125,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, darkMode }
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                Mot de passe configuré : <span className="font-mono font-medium">Maboule35!</span>
+              </p>
             </div>
 
             <div className="flex items-center justify-between pt-1">

@@ -48,9 +48,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
     if (serviceFilter !== 'all' && p.service_type !== serviceFilter) return false;
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
-      const matchComp = p.company.toLowerCase().includes(q);
-      const matchContact = p.contact_name.toLowerCase().includes(q);
-      const matchNotes = p.notes.some((n) => n.toLowerCase().includes(q));
+      const matchComp = (p.company || '').toLowerCase().includes(q);
+      const matchContact = (p.contact_name || '').toLowerCase().includes(q);
+      const matchNotes = Array.isArray(p.notes) && p.notes.some((n) => (n || '').toLowerCase().includes(q));
       if (!matchComp && !matchContact && !matchNotes) return false;
     }
     return true;

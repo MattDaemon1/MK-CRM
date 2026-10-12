@@ -7,6 +7,7 @@ import {
   ProspectStatus,
   TicketStatus,
   ActiveService,
+  TimelineEntry,
   DEFAULT_SERVICE_TYPES
 } from './types/crm';
 import {
@@ -17,7 +18,8 @@ import {
   parseAndValidateImport,
   calculatePipelineMetrics,
   calculateMrrMetrics,
-  syncDatabaseWithServer
+  syncDatabaseWithServer,
+  safeStorage
 } from './services/storage';
 import { detectFollowUps } from './services/followUpEngine';
 import { Header } from './components/Header';
@@ -39,10 +41,12 @@ import { ConfirmDialog } from './components/common/ConfirmDialog';
 export default function App() {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return (
-      localStorage.getItem('mk_crm_auth_user') === 'Matt' ||
-      sessionStorage.getItem('mk_crm_auth_user') === 'Matt'
-    );
+    try {
+      const user = safeStorage.getItem('mk_crm_auth_user');
+      return user === 'Matt';
+    } catch {
+      return false;
+    }
   });
 
   // 1. Initial State
@@ -56,19 +60,26 @@ export default function App() {
 
   // Dark Mode
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('kroma_crm_theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    try {
+      const saved = safeStorage.getItem('kroma_crm_theme');
+      if (saved) return saved === 'dark';
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+    } catch {}
+    return false;
   });
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('kroma_crm_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('kroma_crm_theme', 'light');
-    }
+    try {
+      if (darkMode) {
+        document.documentElement.classList.add('dark');
+        safeStorage.setItem('kroma_crm_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        safeStorage.setItem('kroma_crm_theme', 'light');
+      }
+    } catch {}
   }, [darkMode]);
 
   // Modals & Drawers state
@@ -97,25 +108,31 @@ export default function App() {
   // Live Multi-Device Synchronization (PC <-> Mobile)
   const handleSyncWithServer = useCallback(async (forceToast = false) => {
     setSyncStatus('syncing');
-    const remoteDb = await syncDatabaseWithServer();
-    if (remoteDb && Array.isArray(remoteDb.prospects)) {
-      setDatabase((prevDb) => {
-        // If remote has newer data or previous was default
-        if (remoteDb.last_updated !== prevDb.last_updated) {
-          return remoteDb;
+    try {
+      const remoteDb = await syncDatabaseWithServer();
+      if (remoteDb && Array.isArray(remoteDb.prospects)) {
+        setDatabase((prevDb) => {
+          const remoteTime = new Date(remoteDb.last_updated || 0).getTime();
+          const localTime = new Date(prevDb?.last_updated || 0).getTime();
+
+          if (remoteTime >= localTime) {
+            return remoteDb;
+          }
+          return prevDb;
+        });
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date());
+        if (forceToast) {
+          showToast('🟢 Données synchronisées avec succès (PC ↔ Mobile)');
         }
-        return prevDb;
-      });
-      setSyncStatus('synced');
-      setLastSyncedTime(new Date());
-      if (forceToast) {
-        showToast('🟢 Données synchronisées avec le serveur (PC ↔ Mobile)');
+      } else {
+        setSyncStatus('offline');
+        if (forceToast) {
+          showToast('⚠️ Impossible de joindre le serveur de synchro');
+        }
       }
-    } else {
+    } catch {
       setSyncStatus('offline');
-      if (forceToast) {
-        showToast('⚠️ Impossible de joindre le serveur de synchro');
-      }
     }
   }, []);
 
@@ -129,18 +146,22 @@ export default function App() {
       handleSyncWithServer();
     }, 4000);
 
-    // 3. Sync immediately when window gets focus or tab becomes visible
+    // 3. Sync immediately when window gets focus, tab becomes visible, or back from sleep (critical on mobile)
     const handleFocus = () => handleSyncWithServer();
     const handleVisibility = () => {
       if (!document.hidden) handleSyncWithServer();
     };
 
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus);
+    window.addEventListener('online', handleFocus);
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
+      window.removeEventListener('online', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [handleSyncWithServer]);
@@ -176,6 +197,20 @@ export default function App() {
     () => database.prospects.find((p) => p.id === selectedProspectId) || null,
     [database.prospects, selectedProspectId]
   );
+
+  // Global Search Filter results if any
+  const displayedProspects = useMemo(() => {
+    const list = database?.prospects || [];
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(
+      (p) =>
+        (p.company || '').toLowerCase().includes(q) ||
+        (p.contact_name || '').toLowerCase().includes(q) ||
+        (p.email || '').toLowerCase().includes(q) ||
+        (Array.isArray(p.notes) && p.notes.some((n) => (n || '').toLowerCase().includes(q)))
+    );
+  }, [database?.prospects, searchQuery]);
 
   // 3. Handlers: Prospects
   const handleOpenNewProspect = (initialStatus?: ProspectStatus) => {
@@ -437,13 +472,22 @@ export default function App() {
   };
 
   const handleSaveContract = (clientId: string, contract: ActiveService) => {
+    const isOneOff = contract.billing_cycle === 'Ponctuel';
+    const priceText = isOneOff
+      ? `${contract.one_off_price?.toLocaleString('fr-FR') || 0} € HT`
+      : contract.billing_cycle === 'Annuel'
+      ? `${(contract.annual_price || contract.monthly_price * 12).toLocaleString('fr-FR')} €/an`
+      : `${contract.monthly_price.toLocaleString('fr-FR')} €/m`;
+
     const updatedProspects = database.prospects.map((p) => {
       if (p.id === clientId) {
         const newTimeline: TimelineEntry = {
           id: `t-${Date.now()}`,
           date: '2026-10-11 12:00',
           type: 'note',
-          content: `Souscription contrat récurrent : ${contract.name} (${contract.billing_cycle === 'Annuel' ? `${contract.annual_price || contract.monthly_price * 12} €/an` : `${contract.monthly_price} €/m`}) - Échéance le ${contract.renewal_date}`
+          content: isOneOff
+            ? `Ajout de prestation : ${contract.name} (${priceText})`
+            : `Souscription contrat récurrent : ${contract.name} (${priceText}) - Échéance le ${contract.renewal_date}`
         };
 
         return {
@@ -460,7 +504,10 @@ export default function App() {
       ...database,
       prospects: updatedProspects
     });
-    showToast(`Contrat "${contract.name}" enregistré avec rappel de renouvellement !`);
+    showToast(isOneOff
+      ? `Prestation "${contract.name}" (${priceText}) ajoutée au client !`
+      : `Contrat "${contract.name}" (${priceText}) enregistré avec rappel !`
+    );
   };
 
   const handleRenewContractOneYear = (clientId: string, contractId: string) => {
@@ -538,8 +585,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('mk_crm_auth_user');
-    sessionStorage.removeItem('mk_crm_auth_user');
+    try {
+      safeStorage.removeItem('mk_crm_auth_user');
+    } catch {}
     setIsAuthenticated(false);
     showToast('Déconnexion réussie. À bientôt Matt !');
   };
@@ -557,18 +605,6 @@ export default function App() {
     );
   }
 
-  // 7. Global Search Filter results if any
-  const displayedProspects = useMemo(() => {
-    if (!searchQuery.trim()) return database.prospects;
-    const q = searchQuery.toLowerCase();
-    return database.prospects.filter(
-      (p) =>
-        p.company.toLowerCase().includes(q) ||
-        p.contact_name.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q) ||
-        p.notes.some((n) => n.toLowerCase().includes(q))
-    );
-  }, [database.prospects, searchQuery]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors selection:bg-indigo-500 selection:text-white">
@@ -596,9 +632,9 @@ export default function App() {
         activeTab={activeTab}
         onChangeTab={setActiveTab}
         urgentFollowUpsCount={followUpAlerts.length}
-        openTicketsCount={database.tickets.filter((t) => t.status !== 'Résolu').length}
+        openTicketsCount={(database.tickets || []).filter((t) => t.status !== 'Résolu').length}
         activeMrrCount={mrrMetrics.activeServicesCount}
-        leadsCount={database.prospects.filter((p) => p.status !== 'Gagné' && p.status !== 'Perdu').length}
+        leadsCount={(database.prospects || []).filter((p) => p.status !== 'Gagné' && p.status !== 'Perdu').length}
       />
 
       {/* Main Content Viewport */}
@@ -620,9 +656,9 @@ export default function App() {
 
         {activeTab === 'dashboard' && (
           <DailyDashboard
-            prospects={database.prospects}
-            tickets={database.tickets}
-            tasks={database.tasks}
+            prospects={database.prospects || []}
+            tickets={database.tickets || []}
+            tasks={database.tasks || []}
             followUpAlerts={followUpAlerts}
             pipelineMetrics={pipelineMetrics}
             mrrMetrics={mrrMetrics}
@@ -739,6 +775,8 @@ export default function App() {
         prospects={database.prospects}
         onSaveContract={handleSaveContract}
         defaultClientId={selectedProspectId || undefined}
+        availableServiceTypes={database.custom_service_types || DEFAULT_SERVICE_TYPES}
+        onAddServiceType={handleAddServiceType}
       />
 
       <ClientDetailDrawer
@@ -754,6 +792,8 @@ export default function App() {
         }}
         onDeleteProspect={handleDeleteProspect}
         onShowToast={showToast}
+        availableServiceTypes={database.custom_service_types || DEFAULT_SERVICE_TYPES}
+        onAddServiceType={handleAddServiceType}
       />
 
       {/* In-App Delete Confirmation Dialog for Companies */}

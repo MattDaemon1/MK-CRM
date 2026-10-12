@@ -34,6 +34,8 @@ interface ClientDetailDrawerProps {
   onOpenFollowUp: (prospect: Prospect) => void;
   onDeleteProspect: (prospectId: string) => void;
   onShowToast: (message: string) => void;
+  availableServiceTypes?: string[];
+  onAddServiceType?: (newType: string) => void;
 }
 
 const STATUS_OPTIONS: ProspectStatus[] = [
@@ -53,10 +55,10 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   onEditProspect,
   onOpenFollowUp,
   onDeleteProspect,
-  onShowToast
+  onShowToast,
+  availableServiceTypes = [],
+  onAddServiceType
 }) => {
-  if (!isOpen || !prospect) return null;
-
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'timeline'>('overview');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newNote, setNewNote] = useState('');
@@ -64,17 +66,25 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
   // New contract service form state
   const [isAddingService, setIsAddingService] = useState(false);
-  const [serviceName, setServiceName] = useState('Pack Sérénité Maintenance');
-  const [billingCycle, setBillingCycle] = useState<'Mensuel' | 'Trimestriel' | 'Annuel'>('Annuel');
+  const [serviceName, setServiceName] = useState('Création de site web sur-mesure');
+  const [billingCycle, setBillingCycle] = useState<'Ponctuel' | 'Mensuel' | 'Trimestriel' | 'Annuel'>('Ponctuel');
+  const [category, setCategory] = useState<'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre'>('Projet / Création');
+  const [oneOffPrice, setOneOffPrice] = useState(3500);
   const [monthlyPrice, setMonthlyPrice] = useState(100);
   const [annualPrice, setAnnualPrice] = useState(1200);
+  const [startDate, setStartDate] = useState('2026-10-11');
   const [renewalDate, setRenewalDate] = useState('2027-10-11');
   const [reminderDaysBefore, setReminderDaysBefore] = useState(30);
 
-  const daysSince = getDaysSinceDate(prospect.last_contact_date);
+  const daysSince = prospect ? getDaysSinceDate(prospect.last_contact_date) : 0;
 
-  const totalClientMrr = (prospect.active_services || []).reduce(
-    (acc, s) => (s.status === 'Actif' ? acc + s.monthly_price : acc),
+  const totalClientMrr = (prospect?.active_services || []).reduce(
+    (acc, s) => (s.status === 'Actif' && s.billing_cycle !== 'Ponctuel' ? acc + s.monthly_price : acc),
+    0
+  );
+
+  const totalClientOneOff = (prospect?.active_services || []).reduce(
+    (acc, s) => (s.billing_cycle === 'Ponctuel' ? acc + (s.one_off_price || 0) : acc),
     0
   );
 
@@ -122,11 +132,17 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
     e.preventDefault();
     if (!serviceName.trim()) return;
 
-    const calculatedMonthly = billingCycle === 'Annuel'
+    const isOneOff = billingCycle === 'Ponctuel';
+
+    const calculatedMonthly = isOneOff
+      ? 0
+      : billingCycle === 'Annuel'
       ? Math.round((Number(annualPrice) || 0) / 12)
       : Number(monthlyPrice) || 0;
 
-    const calculatedAnnual = billingCycle === 'Annuel'
+    const calculatedAnnual = isOneOff
+      ? undefined
+      : billingCycle === 'Annuel'
       ? Number(annualPrice) || 0
       : (Number(monthlyPrice) || 0) * 12;
 
@@ -135,18 +151,26 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
       name: serviceName.trim(),
       monthly_price: calculatedMonthly,
       annual_price: calculatedAnnual,
+      one_off_price: isOneOff ? Number(oneOffPrice) || 0 : undefined,
       billing_cycle: billingCycle,
-      start_date: '2026-10-11',
-      renewal_date: renewalDate,
+      category,
+      start_date: startDate || '2026-10-11',
+      renewal_date: isOneOff ? (startDate || '2026-10-11') : renewalDate,
       status: 'Actif',
-      reminder_days_before: Number(reminderDaysBefore) || 30
+      reminder_days_before: isOneOff ? undefined : Number(reminderDaysBefore) || 30
     };
+
+    const priceLabel = isOneOff
+      ? `${Number(oneOffPrice) || 0} € HT (Forfait)`
+      : billingCycle === 'Annuel'
+      ? `${calculatedAnnual} €/an`
+      : `${calculatedMonthly} €/mois`;
 
     const newTimelineEntry: TimelineEntry = {
       id: `t-${Date.now()}`,
       date: '2026-10-11 12:00',
       type: 'note',
-      content: `Nouveau contrat ajouté : ${newSrv.name} (${billingCycle === 'Annuel' ? `${calculatedAnnual} €/an` : `${calculatedMonthly} €/mois`}, échéance le ${renewalDate})`
+      content: `Nouvelle prestation ajoutée : ${newSrv.name} (${priceLabel}${!isOneOff ? `, échéance le ${renewalDate}` : ''})`
     };
 
     const updated: Prospect = {
@@ -154,6 +178,10 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
       active_services: [...(prospect.active_services || []), newSrv],
       timeline: [newTimelineEntry, ...(prospect.timeline || [])]
     };
+
+    if (onAddServiceType && serviceName.trim()) {
+      onAddServiceType(serviceName.trim());
+    }
 
     onUpdateProspect(updated);
     setIsAddingService(false);
@@ -211,6 +239,8 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
     onUpdateProspect(updated);
     onShowToast('Service retiré.');
   };
+
+  if (!isOpen || !prospect) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
@@ -287,7 +317,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                 : 'border-transparent text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            Contrats & MRR ({prospect.active_services?.length || 0})
+            Prestations & Contrats ({prospect.active_services?.length || 0})
           </button>
           <button
             onClick={() => setActiveTab('timeline')}
@@ -379,6 +409,73 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                 </div>
               </div>
 
+              {/* Prestations & Contrats liés */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Prestations & Contrats ({prospect.active_services?.length || 0})
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setActiveTab('services');
+                      setIsAddingService(true);
+                    }}
+                    className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ Ajouter prestation</span>
+                  </button>
+                </div>
+
+                {(!prospect.active_services || prospect.active_services.length === 0) ? (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center">
+                    <p className="text-xs text-slate-500 mb-2">
+                      Aucune prestation spécifique enregistrée (création site, maintenance, évolution...).
+                    </p>
+                    <button
+                      onClick={() => {
+                        setActiveTab('services');
+                        setIsAddingService(true);
+                      }}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Ajouter une prestation à ce client</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {prospect.active_services.map((srv) => (
+                      <div
+                        key={srv.id}
+                        onClick={() => setActiveTab('services')}
+                        className="p-2.5 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-lg border border-slate-200/80 dark:border-slate-800 flex items-center justify-between cursor-pointer transition-colors"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                            {srv.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                            {srv.category && (
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">
+                                {srv.category}
+                              </span>
+                            )}
+                            <span>·</span>
+                            <span>{srv.billing_cycle}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                          {srv.billing_cycle === 'Ponctuel'
+                            ? `${(srv.one_off_price || 0).toLocaleString('fr-FR')} €`
+                            : `${srv.monthly_price} €/m`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Notes rapides */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
@@ -436,58 +533,152 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
           {activeTab === 'services' && (
             <div className="space-y-5">
-              {/* MRR Summary for this client */}
-              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+              {/* MRR & Prestations Summary for this client */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl">
+                  <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
                     Revenu Récurrent Mensuel (MRR)
                   </p>
                   <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
                     {totalClientMrr.toLocaleString('fr-FR')} € / mois
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsAddingService(!isAddingService)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Ajouter contrat</span>
-                </button>
+                <div className="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold text-indigo-800 dark:text-indigo-300">
+                      Prestations Forfaitaires Livrées / En cours
+                    </p>
+                    <p className="text-xl font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      {totalClientOneOff.toLocaleString('fr-FR')} € HT
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddingService(!isAddingService)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ajouter prestation</span>
+                  </button>
+                </div>
               </div>
 
               {/* Add Service Form */}
               {isAddingService && (
                 <form
                   onSubmit={handleAddService}
-                  className="p-4 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded-xl space-y-3"
+                  className="p-4 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded-xl space-y-3 shadow-xs"
                 >
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                    Nouveau Contrat de Récurrence
-                  </h4>
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Ajouter une Prestation ou un Contrat
+                    </h4>
+                    <span className="text-[10px] text-slate-500">
+                      Création, Évolution ou Récurrent
+                    </span>
+                  </div>
+
+                  {/* Prestation Category */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Catégorie de la prestation
+                    </label>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1">
+                      {(['Projet / Création', 'Maintenance', 'Évolution', 'Support', 'Autre'] as const).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setCategory(cat);
+                            if (cat === 'Projet / Création') {
+                              setServiceName('Création de site web vitrine');
+                              setBillingCycle('Ponctuel');
+                              setOneOffPrice(3500);
+                            } else if (cat === 'Maintenance') {
+                              setServiceName('Pack Sérénité Maintenance');
+                              setBillingCycle('Annuel');
+                              setAnnualPrice(1200);
+                              setMonthlyPrice(100);
+                            } else if (cat === 'Évolution') {
+                              setServiceName('Évolution module / Automatisation n8n');
+                              setBillingCycle('Ponctuel');
+                              setOneOffPrice(1800);
+                            }
+                          }}
+                          className={`text-[9px] py-1 px-1.5 rounded-md border font-medium text-center transition-all cursor-pointer ${
+                            category === cat
+                              ? 'bg-emerald-600 text-white border-emerald-600 font-bold'
+                              : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Nom du service
+                      Nom de la prestation *
                     </label>
                     <input
                       type="text"
                       required
+                      list="client-drawer-services-list"
                       value={serviceName}
                       onChange={(e) => setServiceName(e.target.value)}
-                      placeholder="Pack Sérénité, Maintenance n8n, Cloud..."
+                      placeholder="Création site vitrine, Refonte e-commerce, Évolution n8n, Pack Sérénité..."
                       className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                     />
+                    <datalist id="client-drawer-services-list">
+                      {availableServiceTypes.map((st) => (
+                        <option key={st} value={st} />
+                      ))}
+                    </datalist>
+
+                    {/* Quick suggestion chips */}
+                    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                      {['Création site web WordPress', 'Évolution module n8n', 'Pack Sérénité (Maintenance)', 'Hébergement Dédié'].map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => {
+                            setServiceName(st);
+                            if (st.includes('Création')) {
+                              setBillingCycle('Ponctuel');
+                              setCategory('Projet / Création');
+                              setOneOffPrice(3800);
+                            } else if (st.includes('Évolution')) {
+                              setBillingCycle('Ponctuel');
+                              setCategory('Évolution');
+                              setOneOffPrice(1500);
+                            } else if (st.includes('Sérénité')) {
+                              setBillingCycle('Annuel');
+                              setCategory('Maintenance');
+                              setAnnualPrice(1200);
+                              setMonthlyPrice(100);
+                            }
+                          }}
+                          className={`text-[9px] px-1.5 py-0.5 rounded border transition-all cursor-pointer ${
+                            serviceName === st
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Périodicité
+                        Type de facturation
                       </label>
                       <select
                         value={billingCycle}
                         onChange={(e) => {
-                          const cycle = e.target.value as 'Mensuel' | 'Trimestriel' | 'Annuel';
+                          const cycle = e.target.value as 'Ponctuel' | 'Mensuel' | 'Trimestriel' | 'Annuel';
                           setBillingCycle(cycle);
                           if (cycle === 'Annuel') {
                             setRenewalDate('2027-10-11');
@@ -495,14 +686,30 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                         }}
                         className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                       >
-                        <option value="Annuel">Annuel (recommandé)</option>
-                        <option value="Mensuel">Mensuel</option>
-                        <option value="Trimestriel">Trimestriel</option>
+                        <option value="Ponctuel">🎯 Prestation ponctuelle (Forfait)</option>
+                        <option value="Annuel">🔄 Abonnement Annuel (avec rappel)</option>
+                        <option value="Mensuel">📅 Abonnement Mensuel</option>
+                        <option value="Trimestriel">📆 Abonnement Trimestriel</option>
                       </select>
                     </div>
 
                     <div>
-                      {billingCycle === 'Annuel' ? (
+                      {billingCycle === 'Ponctuel' ? (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Montant forfaitaire (€ HT)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            required
+                            value={oneOffPrice}
+                            onChange={(e) => setOneOffPrice(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                          />
+                        </div>
+                      ) : billingCycle === 'Annuel' ? (
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             Montant Annuel (€ HT)
@@ -548,35 +755,49 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {billingCycle === 'Ponctuel' ? (
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Date de renouvellement / échéance
+                        Date de commande / démarrage
                       </label>
                       <input
                         type="date"
-                        value={renewalDate}
-                        onChange={(e) => setRenewalDate(e.target.value)}
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
                         className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
                       />
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Date de renouvellement / échéance
+                        </label>
+                        <input
+                          type="date"
+                          value={renewalDate}
+                          onChange={(e) => setRenewalDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Rappel d'échéance
-                      </label>
-                      <select
-                        value={reminderDaysBefore}
-                        onChange={(e) => setReminderDaysBefore(Number(e.target.value))}
-                        className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
-                      >
-                        <option value={30}>Alerter 30j avant (conseillé)</option>
-                        <option value={15}>Alerter 15j avant</option>
-                        <option value={7}>Alerter 7j avant</option>
-                        <option value={60}>Alerter 60j avant</option>
-                      </select>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Rappel d'échéance
+                        </label>
+                        <select
+                          value={reminderDaysBefore}
+                          onChange={(e) => setReminderDaysBefore(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                        >
+                          <option value={30}>Alerter 30j avant (conseillé)</option>
+                          <option value={15}>Alerter 15j avant</option>
+                          <option value={7}>Alerter 7j avant</option>
+                          <option value={60}>Alerter 60j avant</option>
+                        </select>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex justify-end gap-2 pt-2">
                     <button
@@ -614,37 +835,52 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                         className="p-3.5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-xs font-bold text-slate-900 dark:text-white">
                               {srv.name}
                             </span>
+                            {srv.category && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-sm bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                                {srv.category}
+                              </span>
+                            )}
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
                               {srv.status}
                             </span>
-                            <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-sm bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.2 rounded-sm ${
+                              srv.billing_cycle === 'Ponctuel'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                            }`}>
                               {srv.billing_cycle}
                             </span>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700 dark:text-slate-200 mt-1">
-                            <span>Échéance : <strong className="font-mono">{srv.renewal_date}</strong></span>
-                            <span>·</span>
-                            {daysToRenew < 0 ? (
-                              <span className="font-bold text-rose-600 dark:text-rose-400">
-                                Échu depuis {Math.abs(daysToRenew)} j
-                              </span>
-                            ) : daysToRenew <= 15 ? (
-                              <span className="font-bold text-amber-600 dark:text-amber-400">
-                                🔔 Urgent (dans {daysToRenew} j)
-                              </span>
-                            ) : daysToRenew <= 30 ? (
-                              <span className="font-semibold text-amber-600 dark:text-amber-400">
-                                🔔 À anticiper (dans {daysToRenew} j)
-                              </span>
+                            {srv.billing_cycle === 'Ponctuel' ? (
+                              <span>Démarré le : <strong className="font-mono">{srv.start_date || '2026-10-11'}</strong> · Forfait unique</span>
                             ) : (
-                              <span className="text-emerald-600 dark:text-emerald-400">
-                                Dans {daysToRenew} jours
-                              </span>
+                              <>
+                                <span>Échéance : <strong className="font-mono">{srv.renewal_date}</strong></span>
+                                <span>·</span>
+                                {daysToRenew < 0 ? (
+                                  <span className="font-bold text-rose-600 dark:text-rose-400">
+                                    Échu depuis {Math.abs(daysToRenew)} j
+                                  </span>
+                                ) : daysToRenew <= 15 ? (
+                                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                                    🔔 Urgent (dans {daysToRenew} j)
+                                  </span>
+                                ) : daysToRenew <= 30 ? (
+                                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                    🔔 À anticiper (dans {daysToRenew} j)
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                    Dans {daysToRenew} jours
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -652,7 +888,9 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                         <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                           <div className="text-right">
                             <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              {srv.billing_cycle === 'Annuel'
+                              {srv.billing_cycle === 'Ponctuel'
+                                ? `${(srv.one_off_price || 0).toLocaleString('fr-FR')} € HT`
+                                : srv.billing_cycle === 'Annuel'
                                 ? `${(srv.annual_price || srv.monthly_price * 12).toLocaleString('fr-FR')} € / an`
                                 : `${srv.monthly_price.toLocaleString('fr-FR')} € / mois`}
                             </p>
@@ -664,17 +902,19 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleRenewContractOneYear(srv.id)}
-                              className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer"
-                              title="Reconduire ce contrat pour 1 an de plus"
-                            >
-                              +1 an
-                            </button>
+                            {srv.billing_cycle !== 'Ponctuel' && (
+                              <button
+                                onClick={() => handleRenewContractOneYear(srv.id)}
+                                className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer"
+                                title="Reconduire ce contrat pour 1 an de plus"
+                              >
+                                +1 an
+                              </button>
+                            )}
                             <button
                               onClick={() => handleRemoveService(srv.id)}
                               className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
-                              title="Supprimer ce contrat"
+                              title="Supprimer cette prestation"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

@@ -35,8 +35,6 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   onMarkContactedToday,
   onShowToast
 }) => {
-  if (!isOpen || !prospect) return null;
-
   const [tone, setTone] = useState<FollowUpTone>('professionnel');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -56,7 +54,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
     }
   }, [prospect, contract, tone]);
 
-  const daysSince = getDaysSinceDate(prospect.last_contact_date);
+  const daysSince = prospect ? getDaysSinceDate(prospect.last_contact_date) : 0;
 
   const handleCopy = () => {
     const fullText = `Objet : ${subject}\n\n${body}`;
@@ -82,6 +80,8 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
     onShowToast(`Date de contact mise à jour pour ${prospect.company} !`);
     onClose();
   };
+
+  if (!isOpen || !prospect) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">

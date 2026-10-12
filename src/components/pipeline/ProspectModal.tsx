@@ -60,8 +60,6 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
   availableServiceTypes = DEFAULT_SERVICE_OPTIONS,
   onAddServiceType
 }) => {
-  if (!isOpen) return null;
-
   const [isAddingCustomType, setIsAddingCustomType] = useState(false);
   const [newCustomTypeName, setNewCustomTypeName] = useState('');
 
@@ -186,6 +184,8 @@ export const ProspectModal: React.FC<ProspectModalProps> = ({
     });
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">

@@ -157,12 +157,14 @@ export const INITIAL_DATABASE: CrmDatabase = {
         {
           id: 'srv-3',
           name: 'Maintenance & Supervision Workflows IA',
-          monthly_price: 450,
+          monthly_price: 850,
+          annual_price: 10200,
           billing_cycle: 'Mensuel',
+          category: 'Maintenance',
           start_date: '2026-08-15',
           renewal_date: '2026-11-15',
           status: 'Actif',
-          notes: 'Surveillance des quotas API OpenAI/Gemini, optimisations prompts & scripts'
+          notes: 'Surveillance des quotas API OpenAI/Gemini, optimisations prompts & scripts (850 € / mois)'
         }
       ]
     },

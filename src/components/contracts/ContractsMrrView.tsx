@@ -52,8 +52,9 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
     if (filterType === 'all') return true;
     if (filterType === 'renewals') {
       const days = getDaysUntilRenewal(c.renewal_date);
-      return days <= 45 && c.status === 'Actif';
+      return days <= 45 && c.status === 'Actif' && c.billing_cycle !== 'Ponctuel';
     }
+    if (filterType === 'ponctuel') return c.billing_cycle === 'Ponctuel';
     if (filterType === 'annual') return c.billing_cycle === 'Annuel';
     if (filterType === 'monthly') return c.billing_cycle === 'Mensuel';
     if (filterType === 'paused') return c.status !== 'Actif';
@@ -340,10 +341,11 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
               onChange={(e) => setFilterType(e.target.value)}
               className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
             >
-              <option value="all">Tous les contrats ({allContracts.length})</option>
+              <option value="all">Toutes les prestations & contrats ({allContracts.length})</option>
               <option value="renewals">🔔 Renouvellements proches ({urgentRenewals.length})</option>
-              <option value="annual">Abonnements annuels</option>
-              <option value="monthly">Abonnements mensuels</option>
+              <option value="ponctuel">🎯 Prestations ponctuelles (Forfaits)</option>
+              <option value="annual">🔄 Abonnements annuels</option>
+              <option value="monthly">📅 Abonnements mensuels</option>
               <option value="paused">En pause / Résiliés</option>
             </select>
           </div>
@@ -354,10 +356,10 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/40 dark:bg-slate-900/60">
                 <th className="py-3 px-4">Client / Entreprise</th>
-                <th className="py-3 px-3">Service & Formule</th>
+                <th className="py-3 px-3">Prestation & Nature</th>
                 <th className="py-3 px-3">Périodicité & Montant</th>
                 <th className="py-3 px-3">MRR Mensuel</th>
-                <th className="py-3 px-3">Date d'échéance & Rappel</th>
+                <th className="py-3 px-3">Date / Échéance</th>
                 <th className="py-3 px-3">Statut</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -391,11 +393,18 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
                       </td>
 
                       <td className="py-3 px-3">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {item.name}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            {item.name}
+                          </span>
+                          {item.category && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-sm bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 font-medium">
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
                         {item.notes && (
-                          <p className="text-[10px] text-slate-700 dark:text-slate-200 truncate max-w-xs">
+                          <p className="text-[10px] text-slate-700 dark:text-slate-200 truncate max-w-xs mt-0.5">
                             {item.notes}
                           </p>
                         )}
@@ -403,42 +412,56 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
 
                       <td className="py-3 px-3">
                         <span className="font-semibold text-slate-900 dark:text-white">
-                          {item.billing_cycle === 'Annuel'
+                          {item.billing_cycle === 'Ponctuel'
+                            ? `${(item.one_off_price || 0).toLocaleString('fr-FR')} € HT`
+                            : item.billing_cycle === 'Annuel'
                             ? `${(item.annual_price || item.monthly_price * 12).toLocaleString('fr-FR')} € / an`
                             : `${item.monthly_price.toLocaleString('fr-FR')} € / mois`}
                         </span>
-                        <span className="ml-1.5 px-1.5 py-0.2 rounded-sm text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        <span className={`ml-1.5 px-1.5 py-0.2 rounded-sm text-[10px] font-medium ${
+                          item.billing_cycle === 'Ponctuel'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
                           {item.billing_cycle}
                         </span>
                       </td>
 
                       <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {item.monthly_price.toLocaleString('fr-FR')} € / mois
+                        {item.billing_cycle === 'Ponctuel' ? '—' : `${item.monthly_price.toLocaleString('fr-FR')} € / mois`}
                       </td>
 
                       <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-mono text-slate-700 dark:text-slate-300">
-                          <span>{item.renewal_date}</span>
-                        </div>
-                        <div className="mt-0.5">
-                          {daysToRenew < 0 ? (
-                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                              Échu depuis {Math.abs(daysToRenew)} j
-                            </span>
-                          ) : daysToRenew <= 15 ? (
-                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                              🔔 Urgent : dans {daysToRenew} j
-                            </span>
-                          ) : daysToRenew <= 45 ? (
-                            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                              🔔 À anticiper : dans {daysToRenew} j
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500">
-                              Dans {daysToRenew} jours
-                            </span>
-                          )}
-                        </div>
+                        {item.billing_cycle === 'Ponctuel' ? (
+                          <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400">
+                            Commande : {item.start_date || '2026-10-11'}
+                          </span>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5 font-mono text-slate-700 dark:text-slate-300">
+                              <span>{item.renewal_date}</span>
+                            </div>
+                            <div className="mt-0.5">
+                              {daysToRenew < 0 ? (
+                                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                                  Échu depuis {Math.abs(daysToRenew)} j
+                                </span>
+                              ) : daysToRenew <= 15 ? (
+                                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                                  🔔 Urgent : dans {daysToRenew} j
+                                </span>
+                              ) : daysToRenew <= 45 ? (
+                                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                  🔔 À anticiper : dans {daysToRenew} j
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500">
+                                  Dans {daysToRenew} jours
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </td>
 
                       <td className="py-3 px-3">
@@ -455,21 +478,25 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => onOpenRenewalEmail(item.client, item)}
-                            className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
-                            title="Préparer l'email de relance pour renouvellement"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                          </button>
+                          {item.billing_cycle !== 'Ponctuel' && (
+                            <>
+                              <button
+                                onClick={() => onOpenRenewalEmail(item.client, item)}
+                                className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer"
+                                title="Préparer l'email de relance pour renouvellement"
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                              </button>
 
-                          <button
-                            onClick={() => onRenewContractOneYear(item.client.id, item.id)}
-                            className="px-2 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 cursor-pointer"
-                            title="Reconduire le contrat pour +1 an"
-                          >
-                            +1 an
-                          </button>
+                              <button
+                                onClick={() => onRenewContractOneYear(item.client.id, item.id)}
+                                className="px-2 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                                title="Reconduire le contrat pour +1 an"
+                              >
+                                +1 an
+                              </button>
+                            </>
+                          )}
 
                           <button
                             onClick={() => onSelectProspect(item.client)}

@@ -89,8 +89,8 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Synchronisation live active : vos données sont partagées entre votre PC et votre Mobile. Cliquez pour forcer l'actualisation."
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'offline' ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
-                <span className="hidden xs:inline">Synchro PC ↔ Mobile</span>
-                <span className="xs:hidden">Synchro</span>
+                <span className="hidden sm:inline">Synchro PC ↔ Mobile</span>
+                <span className="sm:hidden">Synchro</span>
                 {syncStatus === 'syncing' && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
               </button>
             </div>
