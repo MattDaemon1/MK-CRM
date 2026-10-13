@@ -15,7 +15,8 @@ import {
   Building,
   CheckSquare,
   Square,
-  Trash2
+  Trash2,
+  Bell
 } from 'lucide-react';
 import { Prospect, Ticket, DailyTask, ActiveService } from '../../types/crm';
 import { StatCard } from './StatCard';
@@ -32,13 +33,14 @@ interface DailyDashboardProps {
   onOpenFollowUpModal: (prospect: Prospect) => void;
   onMarkContactedToday: (prospectId: string, note?: string) => void;
   onToggleTask: (taskId: string) => void;
-  onAddTask: (title: string, priority: 'Haute' | 'Moyenne' | 'Basse') => void;
+  onAddTask: (title: string, priority: 'Haute' | 'Moyenne' | 'Basse', reminderDate?: string) => void;
   onDeleteTask: (taskId: string) => void;
   onClearCompletedTasks?: () => void;
   onSelectProspect: (prospect: Prospect) => void;
   onNavigateToTab: (tab: 'leads' | 'pipeline' | 'tickets' | 'contracts') => void;
   onOpenRenewalEmail?: (client: Prospect, contract: ActiveService) => void;
   onRenewContractOneYear?: (clientId: string, contractId: string) => void;
+  onUpdateTaskReminder?: (taskId: string, reminderDate: string | undefined) => void;
 }
 
 export const DailyDashboard: React.FC<DailyDashboardProps> = ({
@@ -57,10 +59,14 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
   onSelectProspect,
   onNavigateToTab,
   onOpenRenewalEmail,
-  onRenewContractOneYear
+  onRenewContractOneYear,
+  onUpdateTaskReminder
 }) => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'Haute' | 'Moyenne' | 'Basse'>('Haute');
+  const [newTaskReminderDate, setNewTaskReminderDate] = useState('');
+  const [editingReminderTaskId, setEditingReminderTaskId] = useState<string | null>(null);
+  const [tempReminderDate, setTempReminderDate] = useState('');
 
   const safeProspects = Array.isArray(prospects) ? prospects : [];
   const safeTickets = Array.isArray(tickets) ? tickets : [];
@@ -70,14 +76,16 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-    onAddTask(newTaskTitle.trim(), newTaskPriority);
+    onAddTask(newTaskTitle.trim(), newTaskPriority, newTaskReminderDate || undefined);
     setNewTaskTitle('');
+    setNewTaskReminderDate('');
   };
 
   const blockingTickets = safeTickets.filter(
     (t) => t.status !== 'Résolu' && (t.priority === 'Bloquant' || t.priority === 'Normal')
   );
 
+  // Ponctuel services NEVER have renewals!
   const upcomingRenewals = safeProspects
     .flatMap((p) =>
       (p.active_services || []).map((srv) => ({
@@ -86,7 +94,7 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
       }))
     )
     .filter((c) => {
-      if (c.status !== 'Actif' || !c.renewal_date) return false;
+      if (c.status !== 'Actif' || !c.renewal_date || c.billing_cycle === 'Ponctuel') return false;
       const target = new Date(c.renewal_date);
       const diffTime = target.getTime() - new Date('2026-10-11').getTime();
       const days = Math.floor(diffTime / (1000 * 3600 * 24));
@@ -95,6 +103,9 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
     .sort((a, b) => new Date(a.renewal_date).getTime() - new Date(b.renewal_date).getTime());
 
   const completedTasksCount = safeTasks.filter((t) => t.completed).length;
+  const dueRemindersCount = safeTasks.filter(
+    (t) => !t.completed && t.reminder_date && t.reminder_date <= '2026-10-11'
+  ).length;
 
   const pendingProposals = safeProspects.filter(
     (p) => p.status === 'Proposition envoyée' || p.status === 'En attente de signature'
@@ -122,6 +133,15 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
             {safeAlerts.length} relances requises
           </span>
+          {dueRemindersCount > 0 && (
+            <>
+              <span>·</span>
+              <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                <Bell className="w-3 h-3 text-amber-500" />
+                {dueRemindersCount} rappel(s) tâche
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -314,32 +334,38 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {pendingProposals.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => onSelectProspect(p)}
-                  className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all cursor-pointer flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">
-                      {p.company}
-                    </p>
-                    <p className="text-[11px] text-slate-700 dark:text-slate-200">
-                      {p.service_type} · Statut : {p.status}
-                    </p>
+            {pendingProposals.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center">
+                Aucun devis ou proposition en attente de signature.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {pendingProposals.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => onSelectProspect(p)}
+                    className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all cursor-pointer flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {p.company}
+                      </p>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-200">
+                        {p.service_type} · Statut : {p.status}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                        {p.estimated_value.toLocaleString('fr-FR')} €
+                      </p>
+                      <p className="text-[10px] text-slate-700 dark:text-slate-200">
+                        Score {p.lead_score}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                      {p.estimated_value.toLocaleString('fr-FR')} €
-                    </p>
-                    <p className="text-[10px] text-slate-700 dark:text-slate-200">
-                      Score {p.lead_score}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -371,32 +397,58 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
             </div>
 
             {/* Quick Add Task Input */}
-            <form onSubmit={handleCreateTask} className="mb-4 flex items-center gap-2">
-              <input
-                type="text"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="Ajouter une action rapide (+ Entrée)..."
-                className="flex-1 px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-700 dark:placeholder-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <select
-                value={newTaskPriority}
-                onChange={(e) =>
-                  setNewTaskPriority(e.target.value as 'Haute' | 'Moyenne' | 'Basse')
-                }
-                className="px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none"
-              >
-                <option value="Haute">Haute</option>
-                <option value="Moyenne">Moyenne</option>
-                <option value="Basse">Basse</option>
-              </select>
-              <button
-                type="submit"
-                className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer"
-                title="Ajouter la tâche"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+            <form onSubmit={handleCreateTask} className="mb-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="Ajouter une action rapide (+ Entrée)..."
+                  className="flex-1 px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-700 dark:placeholder-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <select
+                  value={newTaskPriority}
+                  onChange={(e) =>
+                    setNewTaskPriority(e.target.value as 'Haute' | 'Moyenne' | 'Basse')
+                  }
+                  className="px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+                >
+                  <option value="Haute">Haute</option>
+                  <option value="Moyenne">Moyenne</option>
+                  <option value="Basse">Basse</option>
+                </select>
+                <button
+                  type="submit"
+                  className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer shadow-xs"
+                  title="Ajouter la tâche"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Date de rappel optionnelle */}
+              <div className="flex items-center gap-2 px-1 text-xs text-slate-600 dark:text-slate-400">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                  <Bell className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Date de rappel (optionnel) :</span>
+                </div>
+                <input
+                  type="date"
+                  value={newTaskReminderDate}
+                  onChange={(e) => setNewTaskReminderDate(e.target.value)}
+                  className="px-2 py-0.5 text-xs font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white focus:outline-none"
+                  title="Fixer une date de rappel"
+                />
+                {newTaskReminderDate && (
+                  <button
+                    type="button"
+                    onClick={() => setNewTaskReminderDate('')}
+                    className="text-[10px] text-slate-400 hover:text-rose-500 cursor-pointer underline"
+                  >
+                    Effacer rappel
+                  </button>
+                )}
+              </div>
             </form>
 
             {/* Task Items */}
@@ -440,7 +492,73 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                           Lié à : {task.related_to.label}
                         </p>
                       )}
+
+                      {/* Reminder date indicator */}
+                      {task.reminder_date && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                              task.reminder_date === '2026-10-11'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-800 font-bold'
+                                : task.reminder_date < '2026-10-11'
+                                ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}
+                          >
+                            <Bell className="w-3 h-3 text-amber-500" />
+                            <span>
+                              {task.reminder_date === '2026-10-11'
+                                ? "Rappel aujourd'hui !"
+                                : task.reminder_date < '2026-10-11'
+                                ? `Rappel échu (${task.reminder_date})`
+                                : `Rappel le ${task.reminder_date}`}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Inline reminder editor if active */}
+                      {editingReminderTaskId === task.id && onUpdateTaskReminder && (
+                        <div className="flex items-center gap-1.5 mt-1.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                          <input
+                            type="date"
+                            value={tempReminderDate}
+                            onChange={(e) => setTempReminderDate(e.target.value)}
+                            className="px-1.5 py-0.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdateTaskReminder(task.id, tempReminderDate || undefined);
+                              setEditingReminderTaskId(null);
+                            }}
+                            className="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+                          >
+                            OK
+                          </button>
+                          {task.reminder_date && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateTaskReminder(task.id, undefined);
+                                setEditingReminderTaskId(null);
+                              }}
+                              className="px-1.5 py-0.5 text-[10px] text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                            >
+                              Supprimer
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setEditingReminderTaskId(null)}
+                            className="px-1.5 py-0.5 text-[10px] text-slate-500 cursor-pointer"
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex items-center gap-1 shrink-0">
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
@@ -453,6 +571,26 @@ export const DailyDashboard: React.FC<DailyDashboardProps> = ({
                       >
                         {task.priority}
                       </span>
+
+                      {/* Button to edit reminder date */}
+                      {onUpdateTaskReminder && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingReminderTaskId(task.id);
+                            setTempReminderDate(task.reminder_date || '2026-10-11');
+                          }}
+                          className={`p-1 rounded cursor-pointer transition-colors ${
+                            task.reminder_date
+                              ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                              : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                          title="Définir ou modifier la date de rappel"
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       <button
                         onClick={() => onDeleteTask(task.id)}
                         className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"

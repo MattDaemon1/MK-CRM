@@ -1,7 +1,8 @@
 import { INITIAL_DATABASE } from '../data/initialData';
 import { CrmDatabase, Prospect, Ticket, DailyTask, DEFAULT_SERVICE_TYPES } from '../types/crm';
 
-const STORAGE_KEY = 'mk_crm_database_v3';
+const STORAGE_KEY = 'mk_crm_database_v4';
+const LEGACY_STORAGE_KEYS = ['mk_crm_database_v1', 'mk_crm_database_v2', 'mk_crm_database_v3'];
 const REFERENCE_DATE = new Date('2026-10-11');
 
 // Safe storage wrapper protecting against iframe SecurityError
@@ -81,6 +82,7 @@ export function sanitizeDatabase(raw: any): CrmDatabase {
               category: s?.category || undefined,
               start_date: String(s?.start_date || '2026-10-11'),
               renewal_date: String(s?.renewal_date || '2027-10-11'),
+              completion_date: s?.completion_date ? String(s.completion_date) : undefined,
               status: s?.status || 'Actif',
               reminder_days_before: Number(s?.reminder_days_before) || 30,
               notes: s?.notes ? String(s.notes) : undefined
@@ -114,6 +116,7 @@ export function sanitizeDatabase(raw: any): CrmDatabase {
         due_date: String(task?.due_date || '2026-10-11'),
         completed: Boolean(task?.completed),
         priority: task?.priority || 'Moyenne',
+        reminder_date: task?.reminder_date ? String(task.reminder_date) : undefined,
         related_to: task?.related_to
       }))
     : INITIAL_DATABASE.tasks;
@@ -135,6 +138,11 @@ export function sanitizeDatabase(raw: any): CrmDatabase {
 // 1. Local Cache Loader (instant offline fallback with sanitization)
 export function loadDatabase(): CrmDatabase {
   try {
+    // Prune legacy keys if present
+    for (const oldKey of LEGACY_STORAGE_KEYS) {
+      safeStorage.removeItem(oldKey);
+    }
+
     const raw = safeStorage.getItem(STORAGE_KEY);
     if (!raw) {
       saveDatabaseLocally(INITIAL_DATABASE);
@@ -165,7 +173,7 @@ export async function syncDatabaseWithServer(): Promise<CrmDatabase | null> {
     const res = await fetch(`/api/crm?_t=${Date.now()}`, {
       cache: 'no-store',
       headers: {
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache'
       }
     });
@@ -183,27 +191,26 @@ export async function syncDatabaseWithServer(): Promise<CrmDatabase | null> {
   return null;
 }
 
-export function saveDatabase(db: CrmDatabase): void {
+export function saveDatabase(db: CrmDatabase): Promise<boolean> {
   const sanitized = sanitizeDatabase(db);
 
   // 1. Save locally immediately
   saveDatabaseLocally(sanitized);
 
   // 2. Push to server for PC <-> Mobile sync
-  try {
-    fetch('/api/crm', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(sanitized),
-      keepalive: true
-    }).catch((err) => {
+  return fetch('/api/crm', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(sanitized),
+    keepalive: true
+  })
+    .then((res) => res.ok)
+    .catch((err) => {
       console.warn('Échec envoi serveur (synchro différée) :', err);
+      return false;
     });
-  } catch (e) {
-    // Ignore fetch error in pure client mode
-  }
 }
 
 export async function resetDatabase(): Promise<CrmDatabase> {
@@ -211,7 +218,10 @@ export async function resetDatabase(): Promise<CrmDatabase> {
     await fetch('/api/crm/reset', { method: 'POST' }).catch(() => {});
   } catch (e) {}
 
-  safeStorage.removeItem(STORAGE_KEY);
+  for (const oldKey of [...LEGACY_STORAGE_KEYS, STORAGE_KEY]) {
+    safeStorage.removeItem(oldKey);
+  }
+
   const sanitized = sanitizeDatabase(INITIAL_DATABASE);
   saveDatabase(sanitized);
   return sanitized;

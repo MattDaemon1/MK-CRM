@@ -1,10 +1,13 @@
 {
-  "version": 2,
-  "last_updated": "2026-10-12T09:48:00.000Z",
+  "version": 4,
+  "last_updated": "2026-10-13T13:20:00.000Z",
   "prospects": [],
   "tickets": [],
   "tasks": [],
   "custom_service_types": [
+    "Création de site web",
+    "Maintenance",
+    "Évolution",
     "Refonte & Dev Web",
     "IA & Automatisation",
     "Workflows n8n",

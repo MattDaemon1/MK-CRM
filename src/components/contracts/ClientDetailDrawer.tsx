@@ -15,7 +15,8 @@ import {
   DollarSign,
   Flame,
   FileText,
-  Edit2
+  Edit2,
+  RotateCcw
 } from 'lucide-react';
 import {
   Prospect,
@@ -69,6 +70,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   const [serviceName, setServiceName] = useState('');
   const [billingCycle, setBillingCycle] = useState<'Ponctuel' | 'Mensuel' | 'Trimestriel' | 'Annuel'>('Ponctuel');
   const [category, setCategory] = useState<'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre'>('Projet / Création');
+  const [serviceStatus, setServiceStatus] = useState<'Actif' | 'Terminé' | 'En pause' | 'Résilié'>('Actif');
   const [oneOffPrice, setOneOffPrice] = useState<number | ''>('');
   const [monthlyPrice, setMonthlyPrice] = useState<number | ''>('');
   const [annualPrice, setAnnualPrice] = useState<number | ''>('');
@@ -93,6 +95,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   );
 
   const handleStatusChange = (newStatus: ProspectStatus) => {
+    if (!prospect) return;
     const timelineEntry: TimelineEntry = {
       id: `t-${Date.now()}`,
       date: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -111,7 +114,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
   const handleAddTimelineNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNote.trim()) return;
+    if (!prospect || !newNote.trim()) return;
 
     const newEntry: TimelineEntry = {
       id: `t-${Date.now()}`,
@@ -134,7 +137,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceName.trim()) return;
+    if (!prospect || !serviceName.trim()) return;
 
     const isOneOff = billingCycle === 'Ponctuel';
 
@@ -160,7 +163,8 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
       category,
       start_date: startDate || new Date().toISOString().slice(0, 10),
       renewal_date: isOneOff ? (startDate || new Date().toISOString().slice(0, 10)) : renewalDate,
-      status: 'Actif',
+      status: serviceStatus,
+      completion_date: serviceStatus === 'Terminé' ? (startDate || new Date().toISOString().slice(0, 10)) : undefined,
       reminder_days_before: isOneOff ? undefined : Number(reminderDaysBefore) || 30
     };
 
@@ -174,7 +178,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
       id: `t-${Date.now()}`,
       date: '2026-10-11 12:00',
       type: 'note',
-      content: `Nouvelle prestation ajoutée : ${newSrv.name} (${priceLabel}${!isOneOff ? `, échéance le ${renewalDate}` : ''})`
+      content: `Nouvelle prestation ajoutée : ${newSrv.name} (${priceLabel}${!isOneOff ? `, échéance le ${renewalDate}` : ''}${serviceStatus === 'Terminé' ? ', statut : Terminé' : ''})`
     };
 
     const updated: Prospect = {
@@ -189,10 +193,55 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
     onUpdateProspect(updated);
     setIsAddingService(false);
-    onShowToast(`Contrat "${serviceName}" activé (+${calculatedMonthly} €/m MRR) !`);
+    onShowToast(`Prestation "${serviceName}" enregistrée (statut: ${serviceStatus}) !`);
+  };
+
+  const handleSetServiceStatus = (
+    serviceId: string,
+    newStatus: 'Actif' | 'Terminé' | 'En pause' | 'Résilié'
+  ) => {
+    if (!prospect) return;
+    const targetService = (prospect.active_services || []).find((s) => s.id === serviceId);
+    if (!targetService) return;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const updatedServices = (prospect.active_services || []).map((s) => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          status: newStatus,
+          completion_date: newStatus === 'Terminé' ? (s.completion_date || todayStr) : s.completion_date
+        };
+      }
+      return s;
+    });
+
+    const newTimelineEntry: TimelineEntry = {
+      id: `t-${Date.now()}`,
+      date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      type: 'status_change',
+      content:
+        newStatus === 'Terminé'
+          ? `Prestation "${targetService.name}" marquée comme terminée et enregistrée.`
+          : `Statut de la prestation "${targetService.name}" modifié : "${newStatus}".`
+    };
+
+    const updated: Prospect = {
+      ...prospect,
+      active_services: updatedServices,
+      timeline: [newTimelineEntry, ...(prospect.timeline || [])]
+    };
+
+    onUpdateProspect(updated);
+    onShowToast(
+      newStatus === 'Terminé'
+        ? `Prestation "${targetService.name}" passée en terminé et enregistrée !`
+        : `Statut de "${targetService.name}" passé à "${newStatus}"`
+    );
   };
 
   const handleRenewContractOneYear = (serviceId: string) => {
+    if (!prospect) return;
     const srv = (prospect.active_services || []).find((s) => s.id === serviceId);
     if (!srv) return;
 
@@ -236,6 +285,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   };
 
   const handleRemoveService = (serviceId: string) => {
+    if (!prospect) return;
     const updated: Prospect = {
       ...prospect,
       active_services: (prospect.active_services || []).filter((s) => s.id !== serviceId)
@@ -767,6 +817,21 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                     </div>
                   )}
 
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Statut initial
+                    </label>
+                    <select
+                      value={serviceStatus}
+                      onChange={(e) => setServiceStatus(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="Actif">{billingCycle === 'Ponctuel' ? "En cours d'exécution (Actif)" : 'Actif'}</option>
+                      <option value="Terminé">Déjà terminé / Livré</option>
+                      <option value="En pause">En pause</option>
+                    </select>
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
@@ -779,7 +844,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                       type="submit"
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs"
                     >
-                      Activer le contrat
+                      Enregistrer la prestation
                     </button>
                   </div>
                 </form>
@@ -812,9 +877,16 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                                 {srv.category}
                               </span>
                             )}
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                              {srv.status}
-                            </span>
+                            {srv.status === 'Terminé' ? (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                                Terminé
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                                {srv.billing_cycle === 'Ponctuel' ? "En cours d'exécution" : srv.status}
+                              </span>
+                            )}
                             <span className={`text-[10px] font-medium px-1.5 py-0.2 rounded-sm ${
                               srv.billing_cycle === 'Ponctuel'
                                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
@@ -826,7 +898,14 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700 dark:text-slate-200 mt-1">
                             {srv.billing_cycle === 'Ponctuel' ? (
-                              <span>Démarré le : <strong className="font-mono">{srv.start_date || '2026-10-11'}</strong> · Forfait unique</span>
+                              <div className="flex items-center gap-2">
+                                <span>Démarré le : <strong className="font-mono">{srv.start_date || '2026-10-11'}</strong></span>
+                                {srv.status === 'Terminé' && (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                    · Terminé le {srv.completion_date || srv.start_date || '2026-10-11'}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <>
                                 <span>Échéance : <strong className="font-mono">{srv.renewal_date}</strong></span>
@@ -870,7 +949,28 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            {srv.billing_cycle !== 'Ponctuel' && (
+                            {/* Action Passer en terminé / Reprendre */}
+                            {srv.status === 'Terminé' ? (
+                              <button
+                                onClick={() => handleSetServiceStatus(srv.id, 'Actif')}
+                                className="px-2 py-1 text-[11px] font-medium rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center gap-1"
+                                title="Repasser cette prestation en cours d'exécution"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reprendre</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleSetServiceStatus(srv.id, 'Terminé')}
+                                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer flex items-center gap-1"
+                                title="Marquer cette prestation comme terminée et enregistrée"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Passer en terminé</span>
+                              </button>
+                            )}
+
+                            {srv.billing_cycle !== 'Ponctuel' && srv.status === 'Actif' && (
                               <button
                                 onClick={() => handleRenewContractOneYear(srv.id)}
                                 className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer"

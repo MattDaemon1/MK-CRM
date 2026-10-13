@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CrmDatabase,
   Prospect,
@@ -57,6 +57,7 @@ export default function App() {
   // Multi-Device Sync State (PC <-> Mobile)
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
   const [lastSyncedTime, setLastSyncedTime] = useState<Date | null>(new Date());
+  const hasInitiallySyncedRef = useRef(false);
 
   // Dark Mode
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -112,10 +113,17 @@ export default function App() {
       const remoteDb = await syncDatabaseWithServer();
       if (remoteDb && Array.isArray(remoteDb.prospects)) {
         setDatabase((prevDb) => {
+          // If first server sync on this device/tab, always adopt server DB
+          if (!hasInitiallySyncedRef.current) {
+            hasInitiallySyncedRef.current = true;
+            return remoteDb;
+          }
+
           const remoteTime = new Date(remoteDb.last_updated || 0).getTime();
           const localTime = new Date(prevDb?.last_updated || 0).getTime();
 
-          if (remoteTime >= localTime) {
+          // If remote is newer or timestamps differ, update local
+          if (remoteTime >= localTime || remoteDb.last_updated !== prevDb?.last_updated) {
             return remoteDb;
           }
           return prevDb;
@@ -418,19 +426,39 @@ export default function App() {
     });
   };
 
-  const handleAddTask = (title: string, priority: 'Haute' | 'Moyenne' | 'Basse') => {
+  const handleAddTask = (
+    title: string,
+    priority: 'Haute' | 'Moyenne' | 'Basse',
+    reminderDate?: string
+  ) => {
     const newTask: DailyTask = {
       id: `tsk-${Date.now().toString().slice(-4)}`,
       title,
       due_date: '2026-10-11',
       completed: false,
-      priority
+      priority,
+      reminder_date: reminderDate || undefined
     };
     updateDb({
       ...database,
       tasks: [newTask, ...database.tasks]
     });
-    showToast('Action ajoutée à la to-do du jour.');
+    showToast(
+      reminderDate
+        ? `Tâche ajoutée avec rappel fixé au ${reminderDate} !`
+        : 'Action ajoutée à la to-do du jour.'
+    );
+  };
+
+  const handleUpdateTaskReminder = (taskId: string, reminderDate: string | undefined) => {
+    const updated = database.tasks.map((t) =>
+      t.id === taskId ? { ...t, reminder_date: reminderDate } : t
+    );
+    updateDb({
+      ...database,
+      tasks: updated
+    });
+    showToast(reminderDate ? `Rappel configuré pour le ${reminderDate}` : 'Rappel retiré');
   };
 
   const handleDeleteTask = (taskId: string) => {
@@ -564,6 +592,63 @@ export default function App() {
     setIsFollowUpModalOpen(true);
   };
 
+  const handleUpdateContractStatus = (
+    clientId: string,
+    contractId: string,
+    newStatus: 'Actif' | 'Terminé' | 'En pause' | 'Résilié'
+  ) => {
+    let clientName = '';
+    let contractName = '';
+
+    const updatedProspects = database.prospects.map((p) => {
+      if (p.id === clientId) {
+        clientName = p.company;
+        const updatedServices = (p.active_services || []).map((s) => {
+          if (s.id === contractId) {
+            contractName = s.name;
+            return {
+              ...s,
+              status: newStatus,
+              completion_date:
+                newStatus === 'Terminé'
+                  ? s.completion_date || new Date().toISOString().slice(0, 10)
+                  : s.completion_date
+            };
+          }
+          return s;
+        });
+
+        const newTimeline: TimelineEntry = {
+          id: `t-${Date.now()}`,
+          date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          type: 'status_change',
+          content:
+            newStatus === 'Terminé'
+              ? `Prestation "${contractName}" marquée comme terminée et enregistrée dans les contrats.`
+              : `Statut de la prestation "${contractName}" passé à "${newStatus}".`
+        };
+
+        return {
+          ...p,
+          active_services: updatedServices,
+          timeline: [newTimeline, ...(p.timeline || [])]
+        };
+      }
+      return p;
+    });
+
+    updateDb({
+      ...database,
+      prospects: updatedProspects
+    });
+
+    showToast(
+      newStatus === 'Terminé'
+        ? `Prestation "${contractName}" (${clientName}) enregistrée comme terminée !`
+        : `Statut de "${contractName}" mis à jour : ${newStatus}`
+    );
+  };
+
   // 6. Backup & Restore
   const handleExport = () => {
     exportDatabaseAsJson(database);
@@ -676,6 +761,7 @@ export default function App() {
             onNavigateToTab={(tab) => setActiveTab(tab)}
             onOpenRenewalEmail={handleOpenRenewalEmail}
             onRenewContractOneYear={handleRenewContractOneYear}
+            onUpdateTaskReminder={handleUpdateTaskReminder}
           />
         )}
 
@@ -734,6 +820,7 @@ export default function App() {
             onNewContract={() => handleOpenNewContract()}
             onRenewContractOneYear={handleRenewContractOneYear}
             onOpenRenewalEmail={handleOpenRenewalEmail}
+            onUpdateContractStatus={handleUpdateContractStatus}
           />
         )}
       </main>
@@ -816,16 +903,16 @@ export default function App() {
       {/* In-App Reset Confirmation Dialog */}
       <ConfirmDialog
         isOpen={isResetConfirmOpen}
-        title="Réinitialiser les données de démonstration ?"
-        message="Cette action rechargera les données par défaut de MK CRM (MP41, Logistique Sologne, Pack Sérénité). Les modifications actuelles seront écrasées."
-        confirmLabel="Réinitialiser"
+        title="Vider et réinitialiser la base de données ?"
+        message="Cette action effacera tous les clients et prestations pour repartir sur une base vierge synchronisée. Vous pourrez saisir vos propres clients et tarifs librement."
+        confirmLabel="Oui, vider la base"
         cancelLabel="Annuler"
         variant="warning"
         onConfirm={async () => {
           const reset = await resetDatabase();
           setDatabase(reset);
           setIsResetConfirmOpen(false);
-          showToast('Données de démo réinitialisées avec succès !');
+          showToast('Base de données réinitialisée (base vierge synchronisée) !');
         }}
         onCancel={() => setIsResetConfirmOpen(false)}
       />

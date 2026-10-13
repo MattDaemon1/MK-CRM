@@ -12,6 +12,9 @@ export type PriorityLevel = 'Chaud' | 'Tiède' | 'Froid';
 export type ServiceType = string;
 
 export const DEFAULT_SERVICE_TYPES: string[] = [
+  'Création de site web',
+  'Maintenance',
+  'Évolution',
   'Refonte & Dev Web',
   'IA & Automatisation',
   'Workflows n8n',
@@ -33,6 +36,7 @@ export interface ActiveService {
   category?: 'Projet / Création' | 'Maintenance' | 'Évolution' | 'Support' | 'Autre';
   start_date: string;
   renewal_date: string;
+  completion_date?: string; // Date de réalisation / fin effective
   status: 'Actif' | 'Terminé' | 'En pause' | 'Résilié';
   notes?: string;
   auto_renew?: boolean;
@@ -93,6 +97,7 @@ export interface DailyTask {
   due_date: string;
   completed: boolean;
   priority: 'Haute' | 'Moyenne' | 'Basse';
+  reminder_date?: string; // Date de rappel si besoin (ex: YYYY-MM-DD)
   related_to?: {
     type: 'prospect' | 'ticket' | 'contract';
     id: string;

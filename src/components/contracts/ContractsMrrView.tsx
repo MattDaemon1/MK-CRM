@@ -14,7 +14,8 @@ import {
   Mail,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { Prospect, ActiveService } from '../../types/crm';
 import { MrrMetrics, getDaysUntilRenewal } from '../../services/storage';
@@ -26,6 +27,11 @@ interface ContractsMrrViewProps {
   onNewContract: () => void;
   onRenewContractOneYear: (clientId: string, contractId: string) => void;
   onOpenRenewalEmail: (prospect: Prospect, contract: ActiveService) => void;
+  onUpdateContractStatus?: (
+    clientId: string,
+    contractId: string,
+    newStatus: 'Actif' | 'Terminé' | 'En pause' | 'Résilié'
+  ) => void;
 }
 
 export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
@@ -34,7 +40,8 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
   onSelectProspect,
   onNewContract,
   onRenewContractOneYear,
-  onOpenRenewalEmail
+  onOpenRenewalEmail,
+  onUpdateContractStatus
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [showExplanation, setShowExplanation] = useState<boolean>(true);
@@ -50,6 +57,8 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
   // Filter logic
   const filtered = allContracts.filter((c) => {
     if (filterType === 'all') return true;
+    if (filterType === 'active') return c.status === 'Actif';
+    if (filterType === 'completed') return c.status === 'Terminé';
     if (filterType === 'renewals') {
       const days = getDaysUntilRenewal(c.renewal_date);
       return days <= 45 && c.status === 'Actif' && c.billing_cycle !== 'Ponctuel';
@@ -57,13 +66,13 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
     if (filterType === 'ponctuel') return c.billing_cycle === 'Ponctuel';
     if (filterType === 'annual') return c.billing_cycle === 'Annuel';
     if (filterType === 'monthly') return c.billing_cycle === 'Mensuel';
-    if (filterType === 'paused') return c.status !== 'Actif';
+    if (filterType === 'paused') return c.status === 'En pause' || c.status === 'Résilié';
     return true;
   });
 
-  // Upcoming renewals (< 45 days)
+  // Upcoming renewals (< 45 days) - Ponctuel services NEVER have renewals!
   const urgentRenewals = allContracts.filter((c) => {
-    if (c.status !== 'Actif' || !c.renewal_date) return false;
+    if (c.status !== 'Actif' || !c.renewal_date || c.billing_cycle === 'Ponctuel') return false;
     const days = getDaysUntilRenewal(c.renewal_date);
     return days <= 45;
   }).sort((a, b) => getDaysUntilRenewal(a.renewal_date) - getDaysUntilRenewal(b.renewal_date));
@@ -146,7 +155,7 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
 
             <div className="p-3 bg-white/70 dark:bg-slate-900/70 rounded-xl border border-indigo-100 dark:border-slate-800">
               <p className="font-bold text-purple-700 dark:text-purple-300 mb-1 flex items-center gap-1">
-                <span>3. Relance & Reconduction en 1 clic</span>
+                <span>3. Relance & Reconduction rapide</span>
               </p>
               <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-[11px]">
                 Cliquez sur <strong>"Relancer"</strong> pour générer un email de renouvellement sur-mesure ou sur <strong>"+1 an"</strong> pour reconduire le contrat instantanément jusqu'à l'année suivante et tracer la note dans l'historique client.
@@ -342,7 +351,9 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
               className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
             >
               <option value="all">Toutes les prestations & contrats ({allContracts.length})</option>
-              <option value="renewals">🔔 Renouvellements proches ({urgentRenewals.length})</option>
+              <option value="active">🟢 En cours / Actifs ({allContracts.filter((c) => c.status === 'Actif').length})</option>
+              <option value="completed">✅ Terminés ({allContracts.filter((c) => c.status === 'Terminé').length})</option>
+              <option value="renewals">🔔 Renouvellements récurrents ({urgentRenewals.length})</option>
               <option value="ponctuel">🎯 Prestations ponctuelles (Forfaits)</option>
               <option value="annual">🔄 Abonnements annuels</option>
               <option value="monthly">📅 Abonnements mensuels</option>
@@ -433,9 +444,16 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
 
                       <td className="py-3 px-3">
                         {item.billing_cycle === 'Ponctuel' ? (
-                          <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400">
-                            Commande : {item.start_date || '2026-10-11'}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400">
+                              Démarré le : {item.start_date || '2026-10-11'}
+                            </span>
+                            {item.status === 'Terminé' && item.completion_date && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                Terminé le : {item.completion_date}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <>
                             <div className="flex items-center gap-1.5 font-mono text-slate-700 dark:text-slate-300">
@@ -465,20 +483,59 @@ export const ContractsMrrView: React.FC<ContractsMrrViewProps> = ({
                       </td>
 
                       <td className="py-3 px-3">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${
-                            item.status === 'Actif'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          {item.status === 'Terminé' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-sm bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300">
+                              <CheckCircle2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                              Terminé
+                            </span>
+                          ) : item.status === 'Actif' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                              {item.billing_cycle === 'Ponctuel' ? 'En cours' : 'Actif'}
+                            </span>
+                          ) : item.status === 'En pause' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                              En pause
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                              Résilié
+                            </span>
+                          )}
+                          {item.status === 'Terminé' && item.completion_date && (
+                            <span className="text-[9px] text-slate-500 font-mono">
+                              Livré le {item.completion_date}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {item.billing_cycle !== 'Ponctuel' && (
+                          {/* Quick status change button */}
+                          {onUpdateContractStatus && (
+                            item.status === 'Terminé' ? (
+                              <button
+                                onClick={() => onUpdateContractStatus(item.client.id, item.id, 'Actif')}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                title="Repasser cette prestation en cours"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reprendre</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onUpdateContractStatus(item.client.id, item.id, 'Terminé')}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer transition-colors"
+                                title="Marquer cette prestation comme terminée et enregistrée"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Terminer</span>
+                              </button>
+                            )
+                          )}
+
+                          {item.billing_cycle !== 'Ponctuel' && item.status === 'Actif' && (
                             <>
                               <button
                                 onClick={() => onOpenRenewalEmail(item.client, item)}

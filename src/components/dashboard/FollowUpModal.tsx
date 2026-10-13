@@ -65,7 +65,8 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   };
 
   const handleOpenMailto = () => {
-    const mailtoUrl = `mailto:${encodeURIComponent(prospect.email)}?subject=${encodeURIComponent(
+    if (!prospect) return;
+    const mailtoUrl = `mailto:${encodeURIComponent(prospect.email || '')}?subject=${encodeURIComponent(
       subject
     )}&body=${encodeURIComponent(body)}`;
     window.location.href = mailtoUrl;
@@ -73,6 +74,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   };
 
   const handleMarkAndClose = () => {
+    if (!prospect) return;
     onMarkContactedToday(
       prospect.id,
       `Relance effectuée (${tone}) - Objet: "${subject}"`

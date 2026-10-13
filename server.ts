@@ -78,9 +78,13 @@ app.post('/api/crm', (req, res) => {
     if (!data || !Array.isArray(data.prospects)) {
       return res.status(400).json({ error: 'Format de base invalide' });
     }
-    saveDatabase(data);
+    const dbToSave = {
+      ...data,
+      last_updated: data.last_updated || new Date().toISOString()
+    };
+    saveDatabase(dbToSave);
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.json({ success: true, updated: new Date().toISOString() });
+    res.json({ success: true, updated: dbToSave.last_updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -88,9 +92,14 @@ app.post('/api/crm', (req, res) => {
 
 app.post('/api/crm/reset', (req, res) => {
   try {
-    saveDatabase(INITIAL_DATABASE);
+    const resetDb = {
+      ...INITIAL_DATABASE,
+      version: 4,
+      last_updated: new Date().toISOString()
+    };
+    saveDatabase(resetDb);
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.json({ success: true, reset: true });
+    res.json({ success: true, reset: true, updated: resetDb.last_updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
